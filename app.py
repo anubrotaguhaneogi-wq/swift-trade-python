@@ -969,3 +969,116 @@ if analyze_button:
                 result_df,
                 use_container_width=True,
                 hide_index=
+True
+            )
+
+            st.download_button(
+                "⬇️ Download CSV",
+                data=result_df.to_csv(index=False).encode("utf-8"),
+                file_name="swift_trade_scan.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
+        else:
+            st.warning(
+                "কোনো valid stock result পাওয়া যায়নি। "
+                "Data diagnostics দেখুন।"
+            )
+
+
+# ============================================================
+# WATCHLIST
+# ============================================================
+
+st.subheader("⭐ Watchlist")
+
+if "watchlist" not in st.session_state:
+    st.session_state.watchlist = []
+
+watch_symbol = st.text_input(
+    "NSE Symbol যোগ করুন",
+    placeholder="যেমন: RELIANCE"
+)
+
+w1, w2 = st.columns(2)
+
+with w1:
+    if st.button("➕ Add to Watchlist", use_container_width=True):
+        symbol = watch_symbol.strip().upper().replace(".NS", "")
+        if symbol and symbol not in st.session_state.watchlist:
+            st.session_state.watchlist.append(symbol)
+            st.success(f"{symbol} Watchlist-এ যোগ হয়েছে।")
+
+with w2:
+    if st.button("🗑️ Clear Watchlist", use_container_width=True):
+        st.session_state.watchlist = []
+        st.success("Watchlist পরিষ্কার করা হয়েছে।")
+
+if st.session_state.watchlist:
+    st.write(", ".join(st.session_state.watchlist))
+
+
+# ============================================================
+# MARKET OVERVIEW
+# ============================================================
+
+st.subheader("📊 Market Overview")
+
+if results:
+    left, right = st.columns(2)
+
+    with left:
+        st.markdown("### 🟢 Top Gainers")
+
+        gainers = sorted(
+            results,
+            key=lambda x: x["chg"],
+            reverse=True
+        )[:5]
+
+        for i, result in enumerate(gainers, 1):
+            st.write(
+                f"{i}. {result['sym']} — {result['chg']:+.2f}%"
+            )
+
+    with right:
+        st.markdown("### 🔴 Top Losers")
+
+        losers = sorted(
+            results,
+            key=lambda x: x["chg"]
+        )[:5]
+
+        for i, result in enumerate(losers, 1):
+            st.write(
+                f"{i}. {result['sym']} — {result['chg']:+.2f}%"
+            )
+
+
+# ============================================================
+# DIAGNOSTICS
+# ============================================================
+
+if st.session_state.get("scan_errors"):
+    with st.expander("⚠️ Data diagnostics"):
+        st.write(
+            "এই stock-গুলোর data পাওয়া যায়নি বা analysis-এর জন্য "
+            "যথেষ্ট history ছিল না:"
+        )
+        st.write(
+            ", ".join(st.session_state.scan_errors)
+        )
+
+
+st.markdown(
+    """
+    <div class="swift-card">
+    ⚠️ Swift Trade একটি technical-analysis scanner।
+    BUY/WAIT/SELL কোনো নিশ্চিত লাভের প্রতিশ্রুতি নয়।
+    এটি daily market data ব্যবহার করে; brokerage/order execution
+    এই app-এর অংশ নয়।
+    </div>
+    """,
+    unsafe_allow_html=True,
+            )
