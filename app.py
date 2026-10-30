@@ -109,6 +109,14 @@ div[data-baseweb="input"] > div {
     font-size: 13px;
 }
 
+.check-ok {
+    color: #00e676;
+}
+
+.check-fail {
+    color: #ff5252;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -327,7 +335,8 @@ def analyze(
     rsi_min=50,
     pullback_pct=1.5,
     volume_multiplier=1.0,
-    atr_multiplier=1.5
+    atr_multiplier=1.5,
+    strategy="Professional Breakout"
 ):
 
     df = get_data(sym)
@@ -488,45 +497,44 @@ def analyze(
     target3 = trigger_price + (risk * 3.0)
 
     # --------------------------------------------------------
-    # CONDITIONS / SCORE
+    # CONDITIONS / SCORE  (Strategy-aware)
     # --------------------------------------------------------
 
     checks = {
-
         "RSI": rsi_value >= rsi_min,
-
         "Trend": trend_up,
-
         "Resistance Break": breakout,
-
         "Pullback": pullback,
-
         "Momentum": rising,
-
         "Volume": volume_ok,
     }
 
-    score = sum(
-        bool(v)
-        for v in checks.values()
-    )
+    # Strategy-specific weighting / filtering
+    if strategy == "Pullback":
+        # Prioritize pullback + trend
+        required_keys = ["Trend", "Pullback", "RSI"]
+    elif strategy == "RSI Momentum":
+        required_keys = ["RSI", "Momentum", "Trend"]
+    elif strategy == "Trend + Volume":
+        required_keys = ["Trend", "Volume", "Momentum"]
+    elif strategy == "Professional Breakout":
+        required_keys = ["Resistance Break", "Trend", "Volume", "RSI"]
+    else:  # Custom
+        required_keys = list(checks.keys())
 
-    total_checks = len(checks)
+    score = sum(bool(checks[k]) for k in required_keys if k in checks)
+    total_checks = len(required_keys)
 
-    confidence = (
-        score / total_checks
-    ) * 100
+    confidence = (score / total_checks) * 100 if total_checks > 0 else 0
 
     # --------------------------------------------------------
     # SIGNAL
     # --------------------------------------------------------
 
-    if score >= 5:
+    if score >= max(4, total_checks - 1):
         signal = "BUY"
-
-    elif score >= 3:
+    elif score >= max(2, total_checks // 2):
         signal = "WAIT"
-
     else:
         signal = "SELL"
 
@@ -581,6 +589,10 @@ def analyze(
         "signal": signal,
 
         "checks": checks,
+
+        "ema20": ema20,
+
+        "ema50": ema50,
     }
 
 
@@ -813,7 +825,8 @@ if analyze_button:
                     rsi_min=rsi_min,
                     pullback_pct=pullback_pct,
                     volume_multiplier=volume_multiplier,
-                    atr_multiplier=atr_multiplier
+                    atr_multiplier=atr_multiplier,
+                    strategy=strategy
                 )
 
                 if result:
@@ -955,36 +968,4 @@ if analyze_button:
             st.dataframe(
                 result_df,
                 use_container_width=True,
-                hide_index=True
-            )
-
-            # ------------------------------------------------
-            # DETAILED CARDS
-            # ------------------------------------------------
-
-            st.subheader(
-                "Detailed Trade Levels"
-            )
-
-            for r in results:
-
-                signal = r["signal"]
-
-                if signal == "BUY":
-                    signal_class = "buy"
-                    icon = "🟢"
-
-                elif signal == "WAIT":
-                    signal_class = "wait"
-                    icon = "🟠"
-
-                else:
-                    signal_class = "sell"
-                    icon = "🔴"
-
-                st.markdown(
-                    f"""
-                    <div class="swift-card">
-
-                    <h3>
-                    {icon} {r['sym']}
+                hide_index=
