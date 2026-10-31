@@ -580,4 +580,25 @@ if results:
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
     # ==================== BOTTOM SECTION ====================
-    b1, b
+    b1, b2 = st.columns(2)
+
+with b1:
+    st.markdown("""
+    <div class="bottom-card">
+        <h4>💡 Swift Tip</h4>
+        <p style="font-size:0.85rem; color:#8ba3c7; margin:0;">
+            ব্রেকআউট এবং ভালো ভলিউম থাকা স্টকগুলোতে ইন্ট্রাডে ট্রেডের সম্ভাবনা বেশি থাকে। সবসময় স্টপ লস মেনে চলুন।
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+with b2:
+    st.markdown("""
+    <div class="bottom-card">
+        <h4>⚡ Quick Scanner Info</h4>
+        <p style="font-size:0.85rem; color:#8ba3c7; margin:0;">
+            এই স্ক্যানারটি প্রতিদিনের ট্রেন্ড, RSI এবং মুভিং এভারেজ বিশ্লেষণ করে রিয়েল-টাইম সিগন্যাল প্রদান করে।
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+        
