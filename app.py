@@ -461,7 +461,7 @@ if should_scan:
     st.session_state.last_refresh = time.time()
     st.toast(f"✅ {len(results)} টি স্টক স্ক্যান সম্পন্ন!", icon="📈")
 
-results = st.session_state.results
+b1, b2 = st.columns(2)
 
 # ==================== SUMMARY CARDS ====================
 if results:
@@ -580,7 +580,7 @@ if results:
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
     # ==================== BOTTOM SECTION ====================
-    b1, b2 = st.columns(2)
+    
 
 with b1:
     st.markdown("""
