@@ -13,6 +13,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# ==================== AUTO REFRESH ====================
+if "auto_refresh" not in st.session_state:
+    st.session_state.auto_refresh = False
+if "refresh_interval" not in st.session_state:
+    st.session_state.refresh_interval = 60
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = time.time()
+
 # ==================== CUSTOM CSS ====================
 st.markdown("""
 <style>
@@ -32,18 +40,9 @@ html, body, [class*="css"] {
     padding: 1rem 1.5rem 2rem 1.5rem;
 }
 
-/* Hide Streamlit branding */
 #MainMenu, footer, header {visibility: hidden;}
 .stDeployButton {display: none;}
 
-/* ===== HEADER ===== */
-.header-container {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1.2rem;
-    gap: 1rem;
-}
 .logo-area {
     display: flex;
     align-items: center;
@@ -73,31 +72,23 @@ html, body, [class*="css"] {
     color: #7a8ba3;
 }
 
-/* ===== INDEX CARDS ===== */
 .index-card {
     background: linear-gradient(145deg, #0f2137, #0c1a2b);
     border: 1px solid #1a3a5c;
     border-radius: 12px;
     padding: 14px 16px;
     height: 100%;
-    transition: all 0.2s ease;
-}
-.index-card:hover {
-    border-color: #2a5a8c;
-    transform: translateY(-2px);
 }
 .index-name {
     font-size: 0.72rem;
     color: #7a8ba3;
     font-weight: 600;
-    letter-spacing: 0.5px;
     margin-bottom: 4px;
 }
 .index-value {
     font-size: 1.25rem;
     font-weight: 700;
     color: #ffffff;
-    margin-bottom: 2px;
 }
 .index-change-up {
     font-size: 0.8rem;
@@ -110,7 +101,6 @@ html, body, [class*="css"] {
     font-weight: 600;
 }
 
-/* ===== SECTION TITLES ===== */
 .section-label {
     font-size: 0.85rem;
     font-weight: 600;
@@ -119,40 +109,10 @@ html, body, [class*="css"] {
     margin-top: 4px;
 }
 
-/* ===== MARKET / SECTOR / STRATEGY BUTTONS ===== */
-.stRadio > div {
-    gap: 0.4rem !important;
-}
-.stRadio label {
-    background: #0f2137 !important;
-    border: 1px solid #1a3a5c !important;
-    border-radius: 8px !important;
-    padding: 6px 14px !important;
-    color: #a0b4cc !important;
-    font-weight: 600 !important;
-    font-size: 0.85rem !important;
-}
-.stRadio label[data-checked="true"], 
-.stRadio [aria-checked="true"] + label {
-    background: linear-gradient(135deg, #00c853, #00a844) !important;
-    border-color: #00e676 !important;
-    color: white !important;
-}
-
-/* Multiselect chips */
-.stMultiSelect [data-baseweb="tag"] {
-    background: #1a3a5c !important;
-    border-radius: 6px !important;
-}
-
-/* ===== SUMMARY CARDS ===== */
 .summary-card {
     border-radius: 12px;
     padding: 16px 18px;
     height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
 }
 .summary-card.blue {
     background: linear-gradient(135deg, #0d2b4e, #0a1f3a);
@@ -180,7 +140,6 @@ html, body, [class*="css"] {
     font-size: 1.6rem;
     font-weight: 800;
     color: #ffffff;
-    line-height: 1.1;
 }
 .summary-sub {
     font-size: 0.75rem;
@@ -188,51 +147,6 @@ html, body, [class*="css"] {
     margin-top: 2px;
 }
 
-/* ===== TABLE STYLING ===== */
-.dataframe {
-    border: none !important;
-}
-.dataframe th {
-    background: #0f2137 !important;
-    color: #8ba3c7 !important;
-    font-weight: 600 !important;
-    font-size: 0.8rem !important;
-    border-bottom: 1px solid #1a3a5c !important;
-}
-.dataframe td {
-    background: #0c1a2b !important;
-    color: #e0e6ed !important;
-    font-size: 0.85rem !important;
-    border-bottom: 1px solid #12253a !important;
-}
-
-/* Signal badges */
-.badge-buy {
-    background: #00c853;
-    color: white;
-    padding: 3px 10px;
-    border-radius: 6px;
-    font-weight: 700;
-    font-size: 0.75rem;
-}
-.badge-wait {
-    background: #ff9800;
-    color: white;
-    padding: 3px 10px;
-    border-radius: 6px;
-    font-weight: 700;
-    font-size: 0.75rem;
-}
-.badge-sell {
-    background: #f44336;
-    color: white;
-    padding: 3px 10px;
-    border-radius: 6px;
-    font-weight: 700;
-    font-size: 0.75rem;
-}
-
-/* ===== BOTTOM CARDS ===== */
 .bottom-card {
     background: linear-gradient(145deg, #0f2137, #0c1a2b);
     border: 1px solid #1a3a5c;
@@ -258,58 +172,26 @@ html, body, [class*="css"] {
     border-bottom: none;
 }
 
-/* ===== BUTTONS ===== */
 .stButton > button {
     border-radius: 8px !important;
     font-weight: 600 !important;
     border: none !important;
-    transition: all 0.2s ease !important;
-}
-.stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
-
-/* Primary scan button */
-div[data-testid="stHorizontalBlock"] button[kind="primary"] {
-    background: linear-gradient(135deg, #00c853, #00a844) !important;
-    color: white !important;
-}
-
-/* Metric styling */
-[data-testid="stMetricValue"] {
-    font-size: 1.4rem !important;
-    font-weight: 700 !important;
-}
-[data-testid="stMetricDelta"] {
-    font-size: 0.85rem !important;
-}
-
-/* Divider */
-hr {
-    border-color: #1a3a5c !important;
-    margin: 1rem 0 !important;
-}
-
-/* Caption */
-.stCaption {
-    color: #5a6f8a !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ==================== DATA ====================
 SECTORS = {
-    "Bank": ["KOTAKBANK", "ICICIBANK", "SBIN", "HDFCBANK", "AXISBANK"],
-    "IT": ["TCS", "HCLTECH", "INFY", "WIPRO", "TECHM"],
-    "Auto": ["M&M", "MARUTI", "BAJAJ-AUTO", "EICHERMOT", "TATAMOTORS"],
-    "Pharma": ["DRREDDY", "DIVISLAB", "SUNPHARMA", "CIPLA"],
-    "Energy": ["RELIANCE", "ONGC", "COALINDIA", "NTPC", "POWERGRID"],
-    "FMCG": ["ITC", "HINDUNILVR", "NESTLEIND", "BRITANNIA"],
-    "Metal": ["TATASTEEL", "JSWSTEEL", "HINDALCO", "VEDL"],
-    "PSU": ["BEL", "HAL", "IRFC", "RVNL", "RECLTD"],
-    "Defence": ["HAL", "BEL", "BHEL", "MAZDOCK", "COCHINSHIP"],
-    "Others": ["ASIANPAINT", "TITAN", "TRENT", "ADANIENT", "ZOMATO"]
+    "Bank": ["KOTAKBANK", "ICICIBANK", "SBIN", "HDFCBANK", "AXISBANK", "INDUSINDBK", "BANDHANBNK", "FEDERALBNK"],
+    "IT": ["TCS", "HCLTECH", "INFY", "WIPRO", "TECHM", "LTIM", "PERSISTENT", "COFORGE"],
+    "Auto": ["M&M", "MARUTI", "BAJAJ-AUTO", "EICHERMOT", "TATAMOTORS", "HEROMOTOCO", "ASHOKLEY", "TVSMOTOR"],
+    "Pharma": ["DRREDDY", "DIVISLAB", "SUNPHARMA", "CIPLA", "APOLLOHOSP", "LUPIN", "AUROPHARMA", "BIOCON"],
+    "Energy": ["RELIANCE", "ONGC", "COALINDIA", "NTPC", "POWERGRID", "BPCL", "IOC", "ADANIGREEN"],
+    "FMCG": ["ITC", "HINDUNILVR", "NESTLEIND", "BRITANNIA", "DABUR", "MARICO", "GODREJCP", "TATACONSUM"],
+    "Metal": ["TATASTEEL", "JSWSTEEL", "HINDALCO", "VEDL", "NMDC", "SAIL", "NATIONALUM", "JINDALSTEL"],
+    "PSU": ["BEL", "HAL", "IRFC", "RVNL", "RECLTD", "PFC", "IRCTC", "NBCC"],
+    "Defence": ["HAL", "BEL", "BHEL", "MAZDOCK", "COCHINSHIP", "BDL", "GRSE", "DATAPATTNS"],
+    "Others": ["ASIANPAINT", "TITAN", "TRENT", "ADANIENT", "ZOMATO", "PAYTM", "POLYCAB", "DIXON", "LT", "ULTRACEMCO"]
 }
 
 INDEX_SYMBOLS = {
@@ -319,29 +201,49 @@ INDEX_SYMBOLS = {
     "INDIA VIX": "^INDIAVIX"
 }
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=45)
 def get_index_data(symbol):
     try:
-        df = yf.download(symbol, period="5d", interval="1d", progress=False, auto_adjust=True)
+        df = yf.download(symbol, period="5d", interval="5m", progress=False, auto_adjust=True)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         if len(df) < 2:
+            df = yf.download(symbol, period="5d", interval="1d", progress=False, auto_adjust=True)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+        if len(df) < 2:
             return None
         price = float(df["Close"].iloc[-1])
-        prev = float(df["Close"].iloc[-2])
+        daily = yf.download(symbol, period="5d", interval="1d", progress=False, auto_adjust=True)
+        if isinstance(daily.columns, pd.MultiIndex):
+            daily.columns = daily.columns.get_level_values(0)
+        if len(daily) >= 2:
+            prev = float(daily["Close"].iloc[-2])
+        else:
+            prev = float(df["Close"].iloc[-2])
         change = price - prev
-        pct = (change / prev) * 100
+        pct = (change / prev) * 100 if prev else 0
         return {"price": price, "change": change, "pct": pct}
     except:
         return None
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=60)
 def get_stock_data(sym):
     try:
         df = yf.download(sym + ".NS", period="1y", interval="1d", progress=False, auto_adjust=True)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
-        return df[["Open", "High", "Low", "Close", "Volume"]].dropna()
+        df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
+        try:
+            intra = yf.download(sym + ".NS", period="5d", interval="5m", progress=False, auto_adjust=True)
+            if isinstance(intra.columns, pd.MultiIndex):
+                intra.columns = intra.columns.get_level_values(0)
+            if len(intra) > 0:
+                latest_price = float(intra["Close"].iloc[-1])
+                df.iloc[-1, df.columns.get_loc("Close")] = latest_price
+        except:
+            pass
+        return df
     except:
         return pd.DataFrame()
 
@@ -355,13 +257,14 @@ def scan_stock(sym, sector_name=""):
     prev_close = float(c.iloc[-2])
     change_pct = (price / prev_close - 1) * 100
 
-    ema20 = c.ewm(span=20, adjust=False).mean().iloc[-1]
-    ema50 = c.ewm(span=50, adjust=False).mean().iloc[-1]
+    ema20 = float(c.ewm(span=20, adjust=False).mean().iloc[-1])
+    ema50 = float(c.ewm(span=50, adjust=False).mean().iloc[-1])
 
     delta = c.diff()
     gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
     loss = (-delta.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
-    rsi = float((100 - 100 / (1 + gain / loss.replace(0, pd.NA))).fillna(50).iloc[-1])
+    rsi_series = (100 - 100 / (1 + gain / loss.replace(0, pd.NA))).fillna(50)
+    rsi = float(rsi_series.iloc[-1])
 
     resistance = float(h.iloc[-21:-1].max())
     support = float(l.iloc[-21:-1].min())
@@ -422,11 +325,7 @@ with col_logo:
     """, unsafe_allow_html=True)
 
 with col_search:
-    search_query = st.text_input(
-        "search",
-        placeholder="🔍 স্টক নাম লিখুন...",
-        label_visibility="collapsed"
-    )
+    search_query = st.text_input("search", placeholder="🔍 স্টক নাম লিখুন...", label_visibility="collapsed")
 
 with col_time:
     now = datetime.now()
@@ -438,11 +337,7 @@ with col_time:
     """, unsafe_allow_html=True)
 
 with col_bell:
-    st.markdown("""
-    <div style="text-align:center; padding-top:10px; font-size:1.4rem;">
-        🔔
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("<div style='text-align:center; padding-top:10px; font-size:1.4rem;'>🔔</div>", unsafe_allow_html=True)
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
@@ -477,13 +372,7 @@ st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
 # ==================== MARKET SELECTOR ====================
 st.markdown('<div class="section-label">Market</div>', unsafe_allow_html=True)
-asset = st.radio(
-    "Market",
-    ["Equity", "F&O", "Forex", "Commodities", "Crypto"],
-    horizontal=True,
-    label_visibility="collapsed",
-    index=0
-)
+asset = st.radio("Market", ["Equity", "F&O", "Forex", "Commodities", "Crypto"], horizontal=True, label_visibility="collapsed", index=0)
 
 if asset != "Equity":
     st.info(f"🚧 **{asset}** মডিউল শীঘ্রই আসছে। এখন শুধু Equity স্ক্যানার চালু আছে।")
@@ -492,12 +381,7 @@ if asset != "Equity":
 # ==================== SECTOR SELECTOR ====================
 st.markdown('<div class="section-label">Sector</div>', unsafe_allow_html=True)
 all_sectors = list(SECTORS.keys())
-selected_sectors = st.multiselect(
-    "Sector",
-    ["ALL"] + all_sectors,
-    default=["ALL"],
-    label_visibility="collapsed"
-)
+selected_sectors = st.multiselect("Sector", ["ALL"] + all_sectors, default=["ALL"], label_visibility="collapsed")
 
 if "ALL" in selected_sectors or not selected_sectors:
     active_sectors = all_sectors
@@ -509,15 +393,29 @@ st.markdown('<div class="section-label">Strategy</div>', unsafe_allow_html=True)
 strat_col1, strat_col2 = st.columns([4, 1.2])
 
 with strat_col1:
-    strategies = st.multiselect(
-        "Strategy",
-        ["Breakout", "Momentum", "Pullback", "Trend"],
-        default=["Breakout", "Momentum"],
-        label_visibility="collapsed"
-    )
+    strategies = st.multiselect("Strategy", ["Breakout", "Momentum", "Pullback", "Trend"], default=["Breakout", "Momentum"], label_visibility="collapsed")
 
 with strat_col2:
     scan_clicked = st.button("🔍 Scan / Analyze", type="primary", use_container_width=True)
+
+# ==================== AUTO REFRESH CONTROLS ====================
+ref_col1, ref_col2, ref_col3 = st.columns([1.5, 1.5, 3])
+
+with ref_col1:
+    auto_refresh = st.checkbox("🔄 Auto Refresh", value=st.session_state.auto_refresh, key="auto_refresh_cb")
+    st.session_state.auto_refresh = auto_refresh
+
+with ref_col2:
+    interval = st.selectbox("Interval", options=[30, 60, 120, 300], format_func=lambda x: f"{x} sec" if x < 60 else f"{x//60} min", index=1, label_visibility="collapsed", key="refresh_interval_select")
+    st.session_state.refresh_interval = interval
+
+with ref_col3:
+    if st.session_state.auto_refresh:
+        elapsed = int(time.time() - st.session_state.last_refresh)
+        remaining = max(0, st.session_state.refresh_interval - elapsed)
+        st.markdown(f"<div style='padding-top:8px; color:#00e676; font-size:0.85rem;'>⏳ Next refresh in <b>{remaining}s</b></div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div style='padding-top:8px; color:#7a8ba3; font-size:0.85rem;'>Auto refresh off</div>", unsafe_allow_html=True)
 
 st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
@@ -527,7 +425,15 @@ if "results" not in st.session_state:
 if "watchlist" not in st.session_state:
     st.session_state.watchlist = set()
 
-if scan_clicked:
+should_scan = scan_clicked
+
+if st.session_state.auto_refresh:
+    elapsed = time.time() - st.session_state.last_refresh
+    if elapsed >= st.session_state.refresh_interval:
+        should_scan = True
+        st.session_state.last_refresh = time.time()
+
+if should_scan:
     symbols_to_scan = []
     sector_map = {}
     for sec in active_sectors:
@@ -552,6 +458,7 @@ if scan_clicked:
 
     results.sort(key=lambda x: (x["_score"], x["Change %"]), reverse=True)
     st.session_state.results = results
+    st.session_state.last_refresh = time.time()
     st.toast(f"✅ {len(results)} টি স্টক স্ক্যান সম্পন্ন!", icon="📈")
 
 results = st.session_state.results
@@ -610,31 +517,23 @@ if results:
     # ==================== SCAN RESULTS TABLE ====================
     st.markdown("### 📊 Scan Results")
 
-    # Sort option
     sort_col1, sort_col2 = st.columns([6, 1.5])
     with sort_col2:
-        sort_by = st.selectbox(
-            "Sort",
-            ["Best Signal", "Highest Change %", "Lowest Change %", "Stock Name"],
-            label_visibility="collapsed"
-        )
+        sort_by = st.selectbox("Sort", ["Best Signal", "Highest Change %", "Lowest Change %", "Stock Name"], label_visibility="collapsed")
 
-    # Apply sorting
     display_results = results.copy()
     if sort_by == "Highest Change %":
         display_results.sort(key=lambda x: x["Change %"], reverse=True)
     elif sort_by == "Lowest Change %":
         display_results.sort(key=lambda x: x["Change %"])
-    elif sort_by == "Stock Name":
+    elif sort homely == "Stock Name":
         display_results.sort(key=lambda x: x["Stock"])
     else:
         display_results.sort(key=lambda x: (x["_score"], x["Change %"]), reverse=True)
 
-    # Filter by search
     if search_query:
         display_results = [r for r in display_results if search_query.upper() in r["Stock"]]
 
-    # Build table data
     table_data = []
     for idx, r in enumerate(display_results, 1):
         signal_emoji = {"BUY": "🟢 BUY", "WAIT": "🟠 WAIT", "SELL": "🔴 SELL"}[r["Signal"]]
@@ -655,7 +554,6 @@ if results:
     if table_data:
         df_display = pd.DataFrame(table_data)
 
-        # Color styling for Change %
         def color_change(val):
             if isinstance(val, str):
                 if val.startswith("+"):
@@ -674,12 +572,11 @@ if results:
             return ""
 
         styled = df_display.style.map(color_change, subset=["Change %"]).map(color_signal, subset=["Signal"])
-
-        st.dataframe(
-            styled,
-            use_container_width=True,
-            hide_index=True,
-            height=min(420, 45 + len(table_data) * 38)
-        )
+        st.dataframe(styled, use_container_width=True, hide_index=True, height=min(420, 45 + len(table_data) * 38))
     else:
-        st.info("কো
+        st.info("কোনো রেজাল্ট পাওয়া যায়নি।")
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    # ==================== BOTTOM SECTION ====================
+    b1, b
