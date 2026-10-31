@@ -526,7 +526,8 @@ if results:
         display_results.sort(key=lambda x: x["Change %"], reverse=True)
     elif sort_by == "Lowest Change %":
         display_results.sort(key=lambda x: x["Change %"])
-    elif sort homely == "Stock Name":
+    elif sort_by == "Stock Name":
+    
         display_results.sort(key=lambda x: x["Stock"])
     else:
         display_results.sort(key=lambda x: (x["_score"], x["Change %"]), reverse=True)
