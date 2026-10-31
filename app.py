@@ -460,7 +460,7 @@ if should_scan:
     st.session_state.results = results
     st.session_state.last_refresh = time.time()
     st.toast(f"✅ {len(results)} টি স্টক স্ক্যান সম্পন্ন!", icon="📈")
-
+results = st.session_state.get("results", [])
 b1, b2 = st.columns(2)
 
 # ==================== SUMMARY CARDS ====================
