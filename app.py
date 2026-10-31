@@ -580,3 +580,6 @@ if results:
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 
     # ==================== BOTTOM SECT
+st.markdown("---")
+st.markdown("<p style='text-align: center; color: gray;'>Swift Trade Scanner v1.0</p>", unsafe_allow_html=True)
+    
