@@ -374,9 +374,9 @@ st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 st.markdown('<div class="section-label">Market</div>', unsafe_allow_html=True)
 asset = st.radio("Market", ["Equity", "F&O", "Forex", "Commodities", "Crypto"], horizontal=True, label_visibility="collapsed", index=0)
 
+# ==================== MARKET ENGINE ====================
 if asset != "Equity":
-    st.info(f"🚧 **{asset}** মডিউল শীঘ্রই আসছে। এখন শুধু Equity স্ক্যানার চালু আছে।")
-    st.stop()
+    st.info(f"🚧 {asset} Market Engine প্রস্তুত করা হচ্ছে...")
 
 # ==================== SECTOR SELECTOR ====================
 st.markdown('<div class="section-label">Sector</div>', unsafe_allow_html=True)
