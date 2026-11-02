@@ -272,14 +272,14 @@ def scan_stock(sym, sector_name=""):
     vol_ratio = float(v.iloc[-1]) / avg_vol if avg_vol else 0
 
     trend_up = price > ema20 > ema50
-    breakout = price > resistance
-    momentum = price > prev_close
-    volume_ok = vol_ratio >= 1.0
-    rsi_ok = rsi >= 50
+    breakout = price > resistance * 1.002
+    momentum = price > float(c.iloc[-2]) and price > float(c.iloc[-4])
+    volume_ok = vol_ratio >= 1.2
+    rsi_ok = 50 <= rsi <= 70
 
     score = sum([trend_up, breakout, momentum, volume_ok, rsi_ok])
 
-    if score >= 4:
+    if score >= 5:
         signal = "BUY"
     elif score >= 2:
         signal = "WAIT"
