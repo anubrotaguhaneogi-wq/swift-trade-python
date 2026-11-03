@@ -408,6 +408,24 @@ FNO_REQUIRED_FIELDS = [
     "IV"
             ]
 
+# ==================== COMMODITY ENGINE ====================
+COMMODITY_SYMBOLS = {
+    "GOLD": "GC=F",
+    "SILVER": "SI=F",
+    "CRUDE OIL": "CL=F",
+    "NATURAL GAS": "NG=F"
+}
+
+COMMODITY_INDICATORS = [
+    "Price",
+    "Change %",
+    "EMA 9",
+    "EMA 20",
+    "EMA 50",
+    "RSI 14",
+    "ATR 14",
+    "Volume Ratio"
+            ]
 # ==================== SECTOR SELECTOR ====================
 st.markdown('<div class="section-label">Sector</div>', unsafe_allow_html=True)
 all_sectors = list(SECTORS.keys())
