@@ -588,7 +588,7 @@ if results:
     if search_query:
         display_results = [r for r in display_results if search_query.upper() in r["Stock"]]
     display_results = display_results[:3]
-        table_data = []
+    table_data = []
     for idx, r in enumerate(display_results, 1):
         signal_emoji = {"BUY": "🟢 BUY", "WAIT": "🟠 WAIT", "SELL": "🔴 SELL"}[r["Signal"]]
         change_str = f"+{r['Change %']:.2f}%" if r["Change %"] >= 0 else f"{r['Change %']:.2f}%"
