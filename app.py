@@ -301,8 +301,8 @@ def scan_stock(sym, sector_name=""):
         signal = "WAIT"
     else:
         signal = "SELL"
-    else:
-        signal = "SELL"
+    
+        
 
     if trend_up:
         trend = "Uptrend"
