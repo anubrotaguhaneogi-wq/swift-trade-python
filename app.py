@@ -280,7 +280,7 @@ delta = rsi_c.diff()
 gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
 loss = (-delta.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
 rsi_series = (100 - 100 / (1 + gain / loss.replace(0, pd.NA))).fillna(50)
-    rsi = float(rsi_series.iloc[-1])
+rsi = float(rsi_series.iloc[-1])
 
     resistance = float(h.iloc[-21:-1].max())
     support = float(l.iloc[-21:-1].min())
