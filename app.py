@@ -273,10 +273,13 @@ def scan_stock(sym, sector_name=""):
     ema20 = float(c.ewm(span=20, adjust=False).mean().iloc[-1])
     ema50 = float(c.ewm(span=50, adjust=False).mean().iloc[-1])
 
-    delta = c.diff()
-    gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
-    loss = (-delta.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
-    rsi_series = (100 - 100 / (1 + gain / loss.replace(0, pd.NA))).fillna(50)
+    rsi_c = c.copy()
+rsi_c.iloc[-1] = price
+
+delta = rsi_c.diff()
+gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
+loss = (-delta.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
+rsi_series = (100 - 100 / (1 + gain / loss.replace(0, pd.NA))).fillna(50)
     rsi = float(rsi_series.iloc[-1])
 
     resistance = float(h.iloc[-21:-1].max())
