@@ -271,7 +271,7 @@ def scan_stock(sym, sector_name=""):
     breakout = price > resistance * 1.002
     momentum = price > float(c.iloc[-2]) and price > float(c.iloc[-4])
     volume_ok = vol_ratio >= 1.2
-    rsi_ok = 50 <= rsi <= 70
+    rsi_ok = 55 <= rsi <= 68
 
     score = sum([trend_up, breakout, pullback, momentum, volume_ok, rsi_ok])
 
