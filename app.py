@@ -295,12 +295,12 @@ def scan_stock(sym, sector_name=""):
 
     score = sum([trend_up, breakout, pullback, momentum, volume_ok, rsi_ok])
 
-if score >= 5 and rsi <= 68 and breakout:
-    signal = "BUY"
-elif score >= 3:
-    signal = "WAIT"
-else:
-    signal = "SELL"
+    if score >= 5 and rsi <= 68 and breakout:
+        signal = "BUY"
+    elif score >= 3:
+        signal = "WAIT"
+    else:
+        signal = "SELL"
     else:
         signal = "SELL"
 
