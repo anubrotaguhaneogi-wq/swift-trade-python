@@ -266,7 +266,7 @@ def scan_stock(sym, sector_name=""):
 
     c, h, l, v = df.Close, df.High, df.Low, df.Volume
     live_price = get_live_price(sym)
-price = live_price if live_price is not None else float(c.iloc[-1])
+    price = live_price if live_price is not None else float(c.iloc[-1])
     prev_close = float(c.iloc[-2])
     change_pct = (price / prev_close - 1) * 100
 
@@ -290,7 +290,7 @@ price = live_price if live_price is not None else float(c.iloc[-1])
     trend_up = price > ema20 > ema50
     breakout = resistance * 1.002 < price <= resistance * 1.025
     momentum = price > float(c.iloc[-2]) and price > float(c.iloc[-4])
-    volume_ok = vol_ratio >= 1.2
+    volume_ok = vol_ratio >= 1.4
     rsi_ok = 55 <= rsi <= 68
 
     score = sum([trend_up, breakout, pullback, momentum, volume_ok, rsi_ok])
