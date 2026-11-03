@@ -389,10 +389,24 @@ st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
 # ==================== MARKET SELECTOR ====================
 st.markdown('<div class="section-label">Market</div>', unsafe_allow_html=True)
 asset = st.radio("Market", ["Equity", "F&O", "Forex", "Commodities", "Crypto"], horizontal=True, label_visibility="collapsed", index=0)
+# ==================== F&O ENGINE ====================
+FNO_UNDERLYINGS = {
+    "NIFTY": "^NSEI",
+    "BANKNIFTY": "^NSEBANK",
+    "FINNIFTY": "NIFTY_FIN_SERVICE",
+    "MIDCPNIFTY": "NIFTY_MID_SELECT"
+}
 
-# ==================== MARKET ENGINE ====================
-if asset != "Equity":
-    st.info(f"🚧 {asset} Market Engine প্রস্তুত করা হচ্ছে...")
+FNO_REQUIRED_FIELDS = [
+    "Strike",
+    "Expiry",
+    "Option Type",
+    "LTP",
+    "OI",
+    "Change OI",
+    "Volume",
+    "IV"
+            ]
 
 # ==================== SECTOR SELECTOR ====================
 st.markdown('<div class="section-label">Sector</div>', unsafe_allow_html=True)
