@@ -288,7 +288,7 @@ price = live_price if live_price is not None else float(c.iloc[-1])
     recent_low = float(l.iloc[-5:].min())
     pullback = recent_low <= resistance and recent_low >= zone_low and price >= resistance
     trend_up = price > ema20 > ema50
-    breakout = price > resistance * 1.002
+    breakout = resistance * 1.002 < price <= resistance * 1.025
     momentum = price > float(c.iloc[-2]) and price > float(c.iloc[-4])
     volume_ok = vol_ratio >= 1.2
     rsi_ok = 55 <= rsi <= 68
