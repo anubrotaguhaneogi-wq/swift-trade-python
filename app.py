@@ -265,7 +265,8 @@ def scan_stock(sym, sector_name=""):
         return None
 
     c, h, l, v = df.Close, df.High, df.Low, df.Volume
-    price = float(c.iloc[-1])
+    live_price = get_live_price(sym)
+price = live_price if live_price is not None else float(c.iloc[-1])
     prev_close = float(c.iloc[-2])
     change_pct = (price / prev_close - 1) * 100
 
