@@ -270,11 +270,13 @@ def scan_stock(sym, sector_name=""):
     prev_close = float(c.iloc[-2])
     change_pct = (price / prev_close - 1) * 100
 
-    ema20 = float(c.ewm(span=20, adjust=False).mean().iloc[-1])
-    ema50 = float(c.ewm(span=50, adjust=False).mean().iloc[-1])
 
     rsi_c = c.copy()
     rsi_c.iloc[-1] = price
+
+    ema20 = float(rsi_c.ewm(span=20, adjust=False).mean().iloc[-1])
+    ema50 = float(rsi_c.ewm(span=50, adjust=False).mean().iloc[-1])
+        ema9 = float(rsi_c.ewm(span=9, adjust=False).mean().iloc[-1])
 
     delta = rsi_c.diff()
     gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
@@ -290,7 +292,7 @@ def scan_stock(sym, sector_name=""):
     zone_low = resistance * (1 - pullback_pct / 100)
     recent_low = float(l.iloc[-5:].min())
     pullback = recent_low <= resistance and recent_low >= zone_low and price >= resistance
-    trend_up = price > ema20 > ema50
+        trend_up = price > ema9 > ema20 > ema50
     breakout = resistance * 1.002 < price <= resistance * 1.025
     momentum = price > float(c.iloc[-2]) and price > float(c.iloc[-4])
     volume_ok = vol_ratio >= 1.4
