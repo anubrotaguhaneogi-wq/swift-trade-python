@@ -1,4 +1,4 @@
-import streamlit as st
+তোimport streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -239,7 +239,26 @@ def get_stock_data(sym):
         return df
     except:
         return pd.DataFrame()
+def get_live_price(sym):
+    try:
+        intra = yf.download(
+            sym + ".NS",
+            period="1d",
+            interval="5m",
+            progress=False,
+            auto_adjust=True
+        )
 
+        if isinstance(intra.columns, pd.MultiIndex):
+            intra.columns = intra.columns.get_level_values(0)
+
+        if len(intra) == 0:
+            return None
+
+        return float(intra["Close"].iloc[-1])
+
+    except:
+        return None
 def scan_stock(sym, sector_name=""):
     df = get_stock_data(sym)
     if len(df) < 60:
