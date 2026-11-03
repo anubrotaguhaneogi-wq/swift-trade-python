@@ -234,15 +234,8 @@ def get_stock_data(sym):
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
         df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
-        try:
-            intra = yf.download(sym + ".NS", period="5d", interval="5m", progress=False, auto_adjust=True)
-            if isinstance(intra.columns, pd.MultiIndex):
-                intra.columns = intra.columns.get_level_values(0)
-            if len(intra) > 0:
-                latest_price = float(intra["Close"].iloc[-1])
-                df.iloc[-1, df.columns.get_loc("Close")] = latest_price
-        except:
-            pass
+                # Keep daily OHLCV data internally consistent.
+        # Live intraday price will not overwrite the daily Close.
         return df
     except:
         return pd.DataFrame()
