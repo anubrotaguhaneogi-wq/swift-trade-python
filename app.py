@@ -613,27 +613,85 @@ if results:
 
     with s2:
         pct = (uptrend_count / total * 100) if total else 0
+
         st.markdown(f"""
         <div class="summary-card green">
             <div class="summary-title">📈 আপ ট্রেন্ড</div>
-                        return ""
+            <div class="summary-value">{uptrend_count}</div>
+            <div class="summary-sub">{pct:.1f}% শেয়ার</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        def color_signal(val):
-            if "BUY" in str(val):
-                return "color: #00e676; font-weight: 700"
-            elif "WAIT" in str(val):
-                return "color: #ffb74d; font-weight: 700"
-            elif "SELL" in str(val):
-                return "color: #ff5252; font-weight: 700"
-            return ""
+    with s3:
+        st.markdown(f"""
+        <div class="summary-card orange">
+            <div class="summary-title">⏳ BUY / WAIT</div>
+            <div class="summary-value">{buy_count} / {wait_count}</div>
+            <div class="summary-sub">সিগন্যালের সংখ্যা</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        styled = df_display.style.map(color_change, subset=["Change %"]).map(color_signal, subset=["Signal"])
-        st.dataframe(styled, use_container_width=True, hide_index=True, height=min(420, 45 + len(table_data) * 38))
-    else:
-        st.info("কোনো রেজাল্ট পাওয়া যায়নি।")
+    with s4:
+        st.markdown(f"""
+        <div class="summary-card red">
+            <div class="summary-title">🔻 SELL</div>
+            <div class="summary-value">{sell_count}</div>
+            <div class="summary-sub">সতর্কতার সিগন্যাল</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+    st.markdown('<div class="section-label">স্ক্যান রেজাল্ট</div>', unsafe_allow_html=True)
 
-    # ==================== BOTTOM SECTION ====================
+    table_data = results[:6]
+    df_display = pd.DataFrame(table_data).drop(
+        columns=["_score", "_rsi"], errors="ignore"
+    )
+
+    if search_query:
+        mask = df_display["Stock"].astype(str).str.contains(
+            search_query.strip(), case=False, na=False
+        )
+        df_display = df_display[mask]
+
+    def color_change(val):
+        try:
+            return "color: #00e676; font-weight: 700" if float(val) >= 0 else "color: #ff5252; font-weight: 700"
+        except (TypeError, ValueError):
+            return ""
+
+    def color_signal(val):
+        if "BUY" in str(val):
+            return "color: #00e676; font-weight: 700"
+        elif "WAIT" in str(val):
+            return "color: #ffb74d; font-weight: 700"
+        elif "SELL" in str(val):
+            return "color: #ff5252; font-weight: 700"
+        return ""
+
+    if not df_display.empty:
+        styled = (
+            df_display.style
+            .map(color_change, subset=["Change %"])
+            .map(color_signal, subset=["Signal"])
+        )
+        st.dataframe(
+            styled,
+            use_container_width=True,
+            hide_index=True,
+            height=min(420, 45 + len(df_display) * 38)
+        )
+    else:
+        st.info("আপনার সার্চ অনুযায়ী কোনো স্টক পাওয়া যায়নি।")
+else:
+    st.info("কোনো রেজাল্ট পাওয়া যায়নি।")
+
+st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+# ==================== BOTTOM SECTION ====================
 st.markdown("---")
-st.markdown("<p style='text-align: center; color: gray;'>Swift Trade Scanner v1.0</p>", unsafe_allow_html=True)
+st.markdown(
+    "<p style='text-align: center; color: gray;'>Swift Trade Scanner v1.0</p>",
+    unsafe_allow_html=True
+        )
+        
