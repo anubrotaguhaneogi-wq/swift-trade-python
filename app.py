@@ -285,7 +285,7 @@ def scan_stock(sym, sector_name=""):
     rsi = float(rsi_series.iloc[-1])
 
     resistance = float(h.iloc[-45:-10].max())
-    support = float(l.iloc[-21:-1].min())
+    support = float(l.iloc[-45:-10].min())
     avg_vol = float(v.iloc[-21:-1].mean())
     vol_ratio = float(v.iloc[-1]) / avg_vol if avg_vol else 0
     pullback_pct = 1.5
