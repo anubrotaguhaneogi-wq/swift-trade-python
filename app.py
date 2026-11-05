@@ -293,6 +293,12 @@ def scan_stock(sym, sector_name=""):
     trend_up = price > ema9 > ema20 > ema50
     break_idx = next((i for i in range(len(c)-10, len(c)) if c.iloc[i] > resistance), -1)
     breakout = break_idx >= 0
+        if breakout:
+        pullback_limit = resistance * (1 + pullback_pct / 100)
+        pullback = any(
+            float(l.iloc[i]) <= pullback_limit
+            for i in range(break_idx + 1, len(l))
+        )
     momentum = price > float(c.iloc[-2]) and price > float(c.iloc[-4])
     volume_ok = vol_ratio >= 1.4
     rsi_ok = 55 <= rsi <= 68
