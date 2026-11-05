@@ -229,17 +229,28 @@ def get_index_data(symbol):
 
 @st.cache_data(ttl=60)
 def get_stock_data(sym):
+    """Fetch clean daily OHLCV data. Intraday prices never overwrite daily candles."""
     try:
-        df = yf.download(sym + ".NS", period="1y", interval="1d", progress=False, auto_adjust=True)
+        df = yf.download(
+            sym + ".NS",
+            period="1y",
+            interval="1d",
+            progress=False,
+            auto_adjust=True
+        )
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
-        df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
-                # Keep daily OHLCV data internally consistent.
-        # Live intraday price will not overwrite the daily Close.
-        return df
-    except:
+        required = ["Open", "High", "Low", "Close", "Volume"]
+        if not all(col in df.columns for col in required):
+            return pd.DataFrame()
+        return df[required].dropna()
+    except Exception:
         return pd.DataFrame()
+
+
+@st.cache_data(ttl=30)
 def get_live_price(sym):
+    """Get the latest intraday quote separately from daily historical candles."""
     try:
         intra = yf.download(
             sym + ".NS",
@@ -248,71 +259,126 @@ def get_live_price(sym):
             progress=False,
             auto_adjust=True
         )
-
         if isinstance(intra.columns, pd.MultiIndex):
             intra.columns = intra.columns.get_level_values(0)
-
-        if len(intra) == 0:
+        if intra.empty or "Close" not in intra.columns:
             return None
-
-        return float(intra["Close"].iloc[-1])
-
-    except:
+        value = float(intra["Close"].iloc[-1])
+        return value if np.isfinite(value) and value > 0 else None
+    except Exception:
         return None
+
+
+def calculate_rsi(series, period=14):
+    """Wilder-style RSI, with safe handling for flat/up-only/down-only series."""
+    delta = series.diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    avg_loss = loss.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100 - (100 / (1 + rs))
+    rsi = rsi.where(avg_loss.ne(0), 100)
+    rsi = rsi.where(avg_gain.ne(0), 0)
+    rsi = rsi.fillna(50)
+    return rsi
+
+
 def scan_stock(sym, sector_name=""):
+    """Original-style breakout + retest scanner, with live quote kept separate."""
     df = get_stock_data(sym)
+    if df is None or len(df) < 60:
+        return None
+
+    df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
     if len(df) < 60:
         return None
 
-    c, h, l, v = df.Close, df.High, df.Low, df.Volume
-    live_price = get_live_price(sym)
-    price = live_price if live_price is not None else float(c.iloc[-1])
-    prev_close = float(c.iloc[-2])
-    change_pct = (price / prev_close - 1) * 100
+    c = df["Close"].astype(float)
+    h = df["High"].astype(float)
+    l = df["Low"].astype(float)
+    v = df["Volume"].astype(float)
 
+    # Resistance/support use the 35 candles before the most recent 10 candles.
+    resistance_window = h.iloc[-45:-10]
+    support_window = l.iloc[-45:-10]
+    if resistance_window.empty or support_window.empty:
+        return None
 
-    rsi_c = c.copy()
-    rsi_c.iloc[-1] = price
+    resistance = float(resistance_window.max())
+    support = float(support_window.min())
+    if not np.isfinite(resistance) or resistance <= 0:
+        return None
 
-    ema20 = float(rsi_c.ewm(span=20, adjust=False).mean().iloc[-1])
-    ema50 = float(rsi_c.ewm(span=50, adjust=False).mean().iloc[-1])
-    ema9 = float(rsi_c.ewm(span=9, adjust=False).mean().iloc[-1])
-
-    delta = rsi_c.diff()
-    gain = delta.clip(lower=0).ewm(alpha=1/14, adjust=False).mean()
-    loss = (-delta.clip(upper=0)).ewm(alpha=1/14, adjust=False).mean()
-    rsi_series = (100 - 100 / (1 + gain / loss.replace(0, pd.NA))).fillna(50)
-    rsi = float(rsi_series.iloc[-1])
-
-    resistance = float(h.iloc[-45:-10].max())
-    support = float(l.iloc[-45:-10].min())
-    avg_vol = float(v.iloc[-21:-1].mean())
-    vol_ratio = float(v.iloc[-1]) / avg_vol if avg_vol else 0
-    pullback_pct = 1.5
+    # Find a breakout close in the latest 10 completed daily candles.
+    recent_start = max(0, len(c) - 10)
+    breakout_positions = [
+        i for i in range(recent_start, len(c))
+        if float(c.iloc[i]) > resistance
+    ]
+    breakout = bool(breakout_positions)
+    break_idx = -1
     pullback = False
-    trend_up = price > ema9 > ema20 > ema50
-    break_idx = next((i for i in range(len(c)-10, len(c)) if c.iloc[i] > resistance), -1)
-    breakout = break_idx >= 0
-    if breakout:
-            pullback_limit = resistance * (1 + pullback_pct / 100)
-            pullback = any(
-                float(l.iloc[i]) <= pullback_limit
-                for i in range(break_idx + 1, len(l))
-            )
-    momentum = price > float(c.iloc[-2]) and price > float(c.iloc[-4])
-    volume_ok = vol_ratio >= 1.4
-    rsi_ok = 55 <= rsi <= 68
+    retest_low = None
 
-                    score = sum([trend_up, breakout, pullback, momentum, volume_ok, rsi_ok])
+    # Find a breakout candle that is followed by a successful retest.
+    # Do not use the latest breakout candle blindly: later closes above
+    # resistance can otherwise hide an already-completed pullback.
+    band_low = resistance * 0.985
+    band_high = resistance * 1.015
+    for candidate_idx in breakout_positions:
+        for i in range(candidate_idx + 1, len(l)):
+            candle_low = float(l.iloc[i])
+            candle_close = float(c.iloc[i])
+            if band_low <= candle_low <= band_high and candle_close >= resistance:
+                break_idx = candidate_idx
+                pullback = True
+                retest_low = candle_low
+                break
+        if pullback:
+            break
 
-        if score >= 5 and rsi <= 68 and breakout and pullback:
-            signal = "BUY"
-        elif score >= 3:
-            signal = "WAIT"
-        else:
-            signal = "SELL"
-    
-        
+    # Daily indicators are based on daily candles only.
+    ema9_series = c.ewm(span=9, adjust=False).mean()
+    ema20_series = c.ewm(span=20, adjust=False).mean()
+    ema50_series = c.ewm(span=50, adjust=False).mean()
+    rsi_series = calculate_rsi(c, 14)
+
+    live_price = get_live_price(sym)
+    daily_close = float(c.iloc[-1])
+    price = float(live_price) if live_price is not None else daily_close
+    if not np.isfinite(price) or price <= 0:
+        return None
+
+    # Keep current quote separate; use it only for current price/confirmation.
+    ema9 = float(ema9_series.iloc[-1])
+    ema20 = float(ema20_series.iloc[-1])
+    ema50 = float(ema50_series.iloc[-1])
+    rsi = float(rsi_series.iloc[-1])
+    prev_close = float(c.iloc[-2])
+    change_pct = ((price / prev_close) - 1) * 100 if prev_close else 0.0
+
+    trend_up = price > ema20 and ema20 > ema50
+    momentum = price > prev_close
+    rsi_ok = rsi > 50
+    breakout_holding = breakout and price >= resistance
+
+    # Score is descriptive; BUY requires the core original setup, not a loose score.
+    score = sum([
+        bool(trend_up),
+        bool(breakout),
+        bool(pullback),
+        bool(momentum),
+        bool(rsi_ok),
+        bool(breakout_holding)
+    ])
+
+    if breakout and pullback and breakout_holding and rsi_ok:
+        signal = "BUY"
+    elif score >= 3:
+        signal = "WAIT"
+    else:
+        signal = "SELL"
 
     if trend_up:
         trend = "Uptrend"
@@ -321,8 +387,11 @@ def scan_stock(sym, sector_name=""):
     else:
         trend = "Sideways"
 
-    trigger = resistance if breakout else price
-    risk = max(trigger - support, price * 0.02)
+    # Entry uses the retest/resistance level; risk has a minimum 2% floor.
+    entry = resistance if breakout else price
+    risk = max(entry - support, price * 0.02)
+    target = entry + (risk * 2)
+    stop_loss = entry - risk
 
     return {
         "Stock": sym,
@@ -330,11 +399,11 @@ def scan_stock(sym, sector_name=""):
         "Change %": round(change_pct, 2),
         "Trend": trend,
         "Signal": signal,
-        "Entry": round(trigger, 2),
-        "Target": round(trigger + risk * 2, 2),
-        "Stop Loss": round(trigger - risk, 2),
+        "Entry": round(entry, 2),
+        "Target": round(target, 2),
+        "Stop Loss": round(stop_loss, 2),
         "Sector": sector_name,
-        "_score": score,
+        "_score": int(score),
         "_rsi": round(rsi, 1)
     }
 
@@ -511,7 +580,7 @@ if should_scan:
         r = scan_stock(sym, sector_map.get(sym, ""))
         if r:
             results.append(r)
-        progress_bar.progress((i + 1) / len(symbols_to_scan))
+        progress_bar.progress((i + 1) / max(1, len(symbols_to_scan)))
 
     progress_bar.empty()
     status_text.empty()
@@ -547,99 +616,4 @@ if results:
         st.markdown(f"""
         <div class="summary-card green">
             <div class="summary-title">📈 আপ ট্রেন্ড</div>
-            <div class="summary-value">{uptrend_count} <span style="font-size:0.9rem;color:#00e676">({pct:.1f}%)</span></div>
-            <div class="summary-sub">Bullish stocks</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with s3:
-        pct = (wait_count / total * 100) if total else 0
-        st.markdown(f"""
-        <div class="summary-card orange">
-            <div class="summary-title">⚡ সাইডওয়েজ</div>
-            <div class="summary-value">{wait_count} <span style="font-size:0.9rem;color:#ffb74d">({pct:.1f}%)</span></div>
-            <div class="summary-sub">Neutral zone</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with s4:
-        pct = (sell_count / total * 100) if total else 0
-        st.markdown(f"""
-        <div class="summary-card red">
-            <div class="summary-title">📉 ডাউন ট্রেন্ড</div>
-            <div class="summary-value">{sell_count} <span style="font-size:0.9rem;color:#ff8a80">({pct:.1f}%)</span></div>
-            <div class="summary-sub">Bearish signals</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<div style='height:20px'></div>", unsafe_allow_html=True)
-
-    # ==================== SCAN RESULTS TABLE ====================
-    st.markdown("### 📊 Scan Results")
-
-    sort_col1, sort_col2 = st.columns([6, 1.5])
-    with sort_col2:
-        sort_by = st.selectbox("Sort", ["Best Signal", "Highest Change %", "Lowest Change %", "Stock Name"], label_visibility="collapsed")
-
-    display_results = results.copy()
-    if sort_by == "Highest Change %":
-        display_results.sort(key=lambda x: x["Change %"], reverse=True)
-    elif sort_by == "Lowest Change %":
-        display_results.sort(key=lambda x: x["Change %"])
-    elif sort_by == "Stock Name":
-    
-        display_results.sort(key=lambda x: x["Stock"])
-    else:
-        display_results.sort(key=lambda x: (x["_score"], x["Change %"]), reverse=True)
-
-    if search_query:
-        display_results = [r for r in display_results if search_query.upper() in r["Stock"]]
-    display_results = display_results[:3]
-    table_data = []
-    for idx, r in enumerate(display_results, 1):
-        signal_emoji = {"BUY": "🟢 BUY", "WAIT": "🟠 WAIT", "SELL": "🔴 SELL"}[r["Signal"]]
-        change_str = f"+{r['Change %']:.2f}%" if r["Change %"] >= 0 else f"{r['Change %']:.2f}%"
-        table_data.append({
-            "#": idx,
-            "Stock Name": r["Stock"],
-            "LTP (₹)": f"{r['LTP']:,.0f}" if r["LTP"] >= 100 else f"{r['LTP']:.2f}",
-            "Change %": change_str,
-            "Trend": r["Trend"],
-            "Signal": signal_emoji,
-            "Entry (₹)": f"{r['Entry']:,.0f}",
-            "Target (₹)": f"{r['Target']:,.0f}",
-            "Stop Loss (₹)": f"{r['Stop Loss']:,.0f}",
-            "Sector": r["Sector"]
-        })
-
-    if table_data:
-        df_display = pd.DataFrame(table_data)
-
-        def color_change(val):
-            if isinstance(val, str):
-                if val.startswith("+"):
-                    return "color: #00e676; font-weight: 600"
-                elif val.startswith("-"):
-                    return "color: #ff5252; font-weight: 600"
-            return ""
-
-        def color_signal(val):
-            if "BUY" in str(val):
-                return "color: #00e676; font-weight: 700"
-            elif "WAIT" in str(val):
-                return "color: #ffb74d; font-weight: 700"
-            elif "SELL" in str(val):
-                return "color: #ff5252; font-weight: 700"
-            return ""
-
-        styled = df_display.style.map(color_change, subset=["Change %"]).map(color_signal, subset=["Signal"])
-        st.dataframe(styled, use_container_width=True, hide_index=True, height=min(420, 45 + len(table_data) * 38))
-    else:
-        st.info("কোনো রেজাল্ট পাওয়া যায়নি।")
-
-    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-    # ==================== BOTTOM SECT
-st.markdown("---")
-st.markdown("<p style='text-align: center; color: gray;'>Swift Trade Scanner v1.0</p>", unsafe_allow_html=True)
-    
+            <div class="sum
