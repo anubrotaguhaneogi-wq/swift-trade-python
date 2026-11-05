@@ -284,7 +284,7 @@ def scan_stock(sym, sector_name=""):
     rsi_series = (100 - 100 / (1 + gain / loss.replace(0, pd.NA))).fillna(50)
     rsi = float(rsi_series.iloc[-1])
 
-    resistance = float(h.iloc[-21:-1].max())
+    resistance = float(h.iloc[-45:-10].max())
     support = float(l.iloc[-21:-1].min())
     avg_vol = float(v.iloc[-21:-1].mean())
     vol_ratio = float(v.iloc[-1]) / avg_vol if avg_vol else 0
