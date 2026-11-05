@@ -293,7 +293,7 @@ def scan_stock(sym, sector_name=""):
     recent_low = float(l.iloc[-5:].min())
     pullback = recent_low <= resistance and recent_low >= zone_low and price >= resistance
     trend_up = price > ema9 > ema20 > ema50
-    breakout = resistance * 1.002 < price <= resistance * 1.025
+    breakout = bool((c.iloc[-10:] > resistance).any())
     momentum = price > float(c.iloc[-2]) and price > float(c.iloc[-4])
     volume_ok = vol_ratio >= 1.4
     rsi_ok = 55 <= rsi <= 68
