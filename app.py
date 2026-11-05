@@ -616,4 +616,24 @@ if results:
         st.markdown(f"""
         <div class="summary-card green">
             <div class="summary-title">📈 আপ ট্রেন্ড</div>
-            <div class="sum
+                        return ""
+
+        def color_signal(val):
+            if "BUY" in str(val):
+                return "color: #00e676; font-weight: 700"
+            elif "WAIT" in str(val):
+                return "color: #ffb74d; font-weight: 700"
+            elif "SELL" in str(val):
+                return "color: #ff5252; font-weight: 700"
+            return ""
+
+        styled = df_display.style.map(color_change, subset=["Change %"]).map(color_signal, subset=["Signal"])
+        st.dataframe(styled, use_container_width=True, hide_index=True, height=min(420, 45 + len(table_data) * 38))
+    else:
+        st.info("কোনো রেজাল্ট পাওয়া যায়নি।")
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    # ==================== BOTTOM SECTION ====================
+st.markdown("---")
+st.markdown("<p style='text-align: center; color: gray;'>Swift Trade Scanner v1.0</p>", unsafe_allow_html=True)
