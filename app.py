@@ -288,10 +288,8 @@ def scan_stock(sym, sector_name=""):
     support = float(l.iloc[-21:-1].min())
     avg_vol = float(v.iloc[-21:-1].mean())
     vol_ratio = float(v.iloc[-1]) / avg_vol if avg_vol else 0
-    pullback_pct = 2.0
-    zone_low = resistance * (1 - pullback_pct / 100)
-    recent_low = float(l.iloc[-5:].min())
-    pullback = recent_low <= resistance and recent_low >= zone_low and price >= resistance
+    pullback_pct = 1.5
+    pullback = False
     trend_up = price > ema9 > ema20 > ema50
     break_idx = next((i for i in range(len(c)-10, len(c)) if c.iloc[i] > resistance), -1)
     breakout = break_idx >= 0
