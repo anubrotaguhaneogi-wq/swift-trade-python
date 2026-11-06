@@ -360,7 +360,7 @@ def scan_stock(sym, sector_name=""):
 
     trend_up = price > ema20 and ema20 > ema50
     momentum = price > prev_close
-    rsi_ok = rsi > 50
+    rsi_ok = 55 <= rsi <= 70
     breakout_holding = breakout and price >= resistance
 
     # Score is descriptive; BUY requires the core original setup, not a loose score.
