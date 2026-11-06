@@ -355,10 +355,10 @@ def scan_stock(sym, sector_name=""):
         return None
 
     # Keep current quote separate; use it only for current price/confirmation.
-    ema9 = float(ema9_series.iloc[-1])
-    ema20 = float(ema20_series.iloc[-1])
-    ema50 = float(ema50_series.iloc[-1])
-    rsi = float(rsi_series.iloc[-1])
+    ema9 = float(ema9_series.iloc[-2])
+    ema20 = float(ema20_series.iloc[-2])
+    ema50 = float(ema50_series.iloc[-2])
+    rsi = float(rsi_series.iloc[-2])
     prev_close = float(c.iloc[-2])
     change_pct = ((price / prev_close) - 1) * 100 if prev_close else 0.0
 
