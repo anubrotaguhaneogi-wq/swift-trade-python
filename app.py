@@ -375,10 +375,10 @@ def scan_stock(sym, sector_name=""):
 
     if breakout and pullback and breakout_holding and rsi_ok:
         signal = "BUY"
-    elif score >= 3:
-        signal = "WAIT"
-    else:
+    elif price < ema20 and ema20 < ema50 and not momentum and rsi < 45:
         signal = "SELL"
+    else:
+        signal = "WAIT"
 
     if trend_up:
         trend = "Uptrend"
