@@ -373,7 +373,7 @@ def scan_stock(sym, sector_name=""):
         bool(breakout_holding)
     ])
 
-    if breakout and pullback and breakout_holding and rsi_ok:
+    if breakout and pullback and breakout_holding and trend_up and momentum and rsi_ok:
         signal = "BUY"
     elif price < ema20 and ema20 < ema50 and not momentum and rsi < 45:
         signal = "SELL"
