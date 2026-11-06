@@ -311,10 +311,14 @@ def scan_stock(sym, sector_name=""):
         return None
 
     # Find a breakout close in the latest 10 completed daily candles.
-    recent_start = max(0, len(c) - 10)
+    # FIX-03: Require confirmed breakout volume.
+    recent_start = max(0, len(c) - 11)
     breakout_positions = [
-        i for i in range(recent_start, len(c))
-        if float(c.iloc[i]) > resistance
+        i for i in range(recent_start, len(c) - 1)
+        if i >= 20
+        and float(c.iloc[i]) > resistance
+        and float(v.iloc[i-20:i].mean()) > 0
+        and float(v.iloc[i]) >= 1.5 * float(v.iloc[i-20:i].mean())
     ]
     breakout = bool(breakout_positions)
     break_idx = -1
