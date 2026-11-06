@@ -330,7 +330,7 @@ def scan_stock(sym, sector_name=""):
         for i in range(candidate_idx + 1, len(l)):
             candle_low = float(l.iloc[i])
             candle_close = float(c.iloc[i])
-            if band_low <= candle_low <= band_high and candle_close >= resistance:
+            if i >= len(c) - 3 and band_low <= candle_low <= band_high and candle_close >= resistance:
                 break_idx = candidate_idx
                 pullback = True
                 retest_low = candle_low
