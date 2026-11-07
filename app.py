@@ -158,11 +158,9 @@ STATUS = {
     "AVOID":   {"label": "🔴 এড়িয়ে চলুন", "color": "#ff5252", "prio": 5},
 }
 
-
 # ==================== TIME HELPERS ====================
 def now_ist():
     return pd.Timestamp.now(tz=IST)
-
 
 def to_ist_index(df):
     df = df.copy()
@@ -174,7 +172,6 @@ def to_ist_index(df):
     df.index = idx
     return df
 
-
 def clean_daily(df):
     df = df.copy()
     idx = pd.DatetimeIndex(df.index)
@@ -183,14 +180,11 @@ def clean_daily(df):
     df.index = idx.normalize()
     return df
 
-
 def completed(df, minutes):
-    """Drop the candle that is still forming right now."""
     if df is None or df.empty:
         return df
     cutoff = now_ist() + pd.Timedelta(seconds=20)
     return df[(df.index + pd.Timedelta(minutes=minutes)) <= cutoff]
-
 
 def market_state():
     t = now_ist()
@@ -206,7 +200,6 @@ def market_state():
     if 11 * 60 + 30 <= mins <= 13 * 60 + 30:
         return "slow", "এখন বাজার সাধারণত ঝিমিয়ে থাকে। নতুন এন্ট্রির সেরা সময় ৯:৪৫ থেকে ১০:৪৫।"
     return "open", ""
-
 
 # ==================== DATA ====================
 @st.cache_data(ttl=45, show_spinner=False)
@@ -226,10 +219,8 @@ def get_index_snapshot():
             continue
     return out
 
-
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_batch(tickers, period, interval):
-    """One download call for many stocks. Returns {ticker: OHLCV dataframe}."""
     out = {}
     cols = ["Open", "High", "Low", "Close", "Volume"]
     try:
@@ -251,7 +242,6 @@ def fetch_batch(tickers, period, interval):
             continue
     return out
 
-
 # ==================== INDICATORS ====================
 def calculate_rsi(series, period=14):
     delta = series.diff()
@@ -265,7 +255,6 @@ def calculate_rsi(series, period=14):
     rsi = rsi.where(avg_gain.ne(0), 0)
     return rsi.fillna(50)
 
-
 def calculate_atr(df, period=14):
     prev_close = df["Close"].shift(1)
     tr = pd.concat([
@@ -275,7 +264,6 @@ def calculate_atr(df, period=14):
     ], axis=1).max(axis=1)
     return tr.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
 
-
 def nz(x, default=0.0):
     try:
         x = float(x)
@@ -283,9 +271,7 @@ def nz(x, default=0.0):
     except Exception:
         return default
 
-
 def slot_volume_ratio(c15, session_date, ts):
-    """Volume of one 15M candle vs the average of the same time slot on previous days."""
     prior = c15[(c15["_date"] < session_date) & (c15["_tod"] == ts.time())]
     if prior.empty:
         return np.nan
@@ -293,18 +279,14 @@ def slot_volume_ratio(c15, session_date, ts):
     cur = float(c15.loc[ts, "Volume"])
     return cur / avg if avg > 0 else np.nan
 
-
 def day_volume_ratio(c15, session_date, last_tod):
-    """Today's total volume so far vs average of previous days up to the same time."""
     cum_today = float(c15[c15["_date"] == session_date]["Volume"].sum())
     prior = c15[(c15["_date"] < session_date) & (c15["_tod"] <= last_tod)]
     if prior.empty:
         return np.nan
     avg = float(prior.groupby("_date")["Volume"].sum().tail(10).mean())
     return cum_today / avg if avg > 0 else np.nan
-
-
-# ==================== CORE ANALYSIS ====================
+      # ==================== CORE ANALYSIS ====================
 def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     """Returns (result_dict, None) or (None, reason_for_skipping)."""
     if d_daily is None or d_1h is None or d_15 is None or d_5 is None:
@@ -471,13 +453,184 @@ def run_scan(active_sectors):
         t = sym + ".NS"
         try:
             r, why = analyze(sym, sym_sector[sym], daily.get(t), h1.get(t), m15.get(t), m5.get(t))
-        except Exception as e:  # one bad stock must never stop the scan
-            r, why = None, f"ত্রুটি: {type(e).__name__}"
-        if r:
-            rows.append(r)
-        else:
-            skipped.append(f"{sym}: {why}")
-    bar.empty()
+            if r:
+                rows.append(r)
+            else:
+                skipped.append((sym, why))
+        except Exception as e:
+            skipped.append((sym, str(e)))
 
-    ranked = sorted(rows, key=lambda x: (x["_prio"], -x["_score"]))
-    candidates = [r for r in ranked if r["_key"] != "AVO
+    bar.progress(100, text="স্ক্যান সম্পন্ন!")
+    time.sleep(0.3)
+    bar.empty()
+    return rows, skipped
+
+# ==================== MAIN UI ====================
+def main():
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.markdown("""
+        <div class="logo-area">
+          <div class="logo-icon">📈</div>
+          <div class="logo-text">
+            <h1>Swift Trade</h1>
+            <p>Smart Stock Scanner | Multi-Timeframe Breakout & Trend Filter</p>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.write("")
+        if HAS_AUTOREFRESH:
+            ar_on = st.toggle("🔄 অটো রিফ্রেশ (২ মি)", value=st.session_state["auto_refresh"])
+            if ar_on != st.session_state["auto_refresh"]:
+                st.session_state["auto_refresh"] = ar_on
+                st.rerun()
+            if st.session_state["auto_refresh"]:
+                st_autorefresh(interval=120000, key="datarefresh")
+
+    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+
+    # Index bar
+    idx_data = get_index_snapshot()
+    if idx_data:
+        cols = st.columns(len(idx_data))
+        for i, (k, v) in enumerate(idx_data.items()):
+            with cols[i]:
+                ch_class = "index-change-up" if v["change"] >= 0 else "index-change-down"
+                sign = "+" if v["change"] >= 0 else ""
+                st.markdown(f"""
+                <div class="index-card">
+                  <div class="index-name">{k}</div>
+                  <div class="index-value">{v['price']:,.2f}</div>
+                  <div class="{ch_class}">{sign}{v['change']:,.2f} ({sign}{v['pct']:.2f}%)</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+
+    # Sidebar / Controls
+    with st.expander("⚙️ সেক্টর ও সেটিংস ফিল্টার (ক্লিক করে খুলুন)", expanded=False):
+        all_secs = list(SECTORS.keys())
+        selected_sectors = st.multiselect("সেক্টর নির্বাচন করুন:", all_secs, default=all_secs)
+
+    m_status, m_msg = market_state()
+    if m_msg:
+        b_type = "warn" if m_status != "open" else "info"
+        st.markdown(f'<div class="banner {b_type}">📢 <b>বাজার পরিস্থিতি:</b> {m_msg}</div>', unsafe_allow_html=True)
+
+    c_scan, c_clear, c_info = st.columns([1.2, 1, 3])
+    with c_scan:
+        scan_clicked = st.button("🚀 স্ক্যান শুরু করুন", type="primary", use_container_width=True)
+    with c_clear:
+        clear_clicked = st.button("🗑️ রিসেট", use_container_width=True)
+
+    if clear_clicked:
+        st.session_state["picks"] = []
+        st.session_state["all_rows"] = []
+        st.session_state["skipped"] = []
+        st.session_state["n_scanned"] = 0
+        st.session_state["n_avoid"] = 0
+        st.rerun()
+
+    if scan_clicked or (not st.session_state["all_rows"] and not scan_clicked):
+        secs_to_scan = selected_sectors if 'selected_sectors' in locals() and selected_sectors else list(SECTORS.keys())
+        rows, skipped = run_scan(secs_to_scan)
+        
+        valid = [r for r in rows if r["_key"] != "AVOID"]
+        valid.sort(key=lambda x: (x["_prio"], -x["_score"]))
+        picks = valid[:TOP_N]
+
+        st.session_state["picks"] = picks
+        st.session_state["all_rows"] = rows
+        st.session_state["skipped"] = skipped
+        st.session_state["n_scanned"] = len(rows)
+        st.session_state["n_avoid"] = len([r for r in rows if r["_key"] == "AVOID"])
+        st.session_state["last_scan_ts"] = time.time()
+        st.session_state["last_scan_label"] = now_ist().strftime("%I:%M:%S %p")
+
+    picks = st.session_state["picks"]
+    all_rows = st.session_state["all_rows"]
+
+    if all_rows:
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        s1, s2, s3, s4 = st.columns(4)
+        with s1:
+            st.markdown(f'<div class="summary-card blue"><div class="summary-title">স্ক্যান করা স্টক</div><div class="summary-value">{st.session_state["n_scanned"]}</div><div class="summary-sub">নির্বাচিত সেক্টর থেকে</div></div>', unsafe_allow_html=True)
+        with s2:
+            st.markdown(f'<div class="summary-card green"><div class="summary-title">আজকের সেরা সুযোগ</div><div class="summary-value">{len(picks)}</div><div class="summary-sub">শীর্ষ রেংকড স্টক</div></div>', unsafe_allow_html=True)
+        with s3:
+            st.markdown(f'<div class="summary-card orange"><div class="summary-title">নেগেটিভ ট্রেন্ড (এড়িয়ে চলুন)</div><div class="summary-value">{st.session_state["n_avoid"]}</div><div class="summary-sub">নিচের দিকে ঝুঁকিপূর্ণ</div></div>', unsafe_allow_html=True)
+        with s4:
+            lbl = st.session_state["last_scan_label"] if st.session_state["last_scan_label"] else "এখনই"
+            st.markdown(f'<div class="summary-card blue"><div class="summary-title">সর্বশেষ স্ক্যান</div><div class="summary-value" style="font-size:1.1rem; margin-top:4px;">{lbl}</div><div class="summary-sub">স্বয়ংক্রিয় আপডেট চালু আছে</div></div>', unsafe_allow_html=True)
+
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+        st.markdown(f"### 🏆 আজকের সেরা {len(picks)} টি স্টক (ব্রেকআউট ও ট্রেন্ড ফিল্টার অনুযায়ী)", unsafe_allow_html=True)
+        st.markdown("<div class='section-label'>প্রতিটি কার্ডে নিখুঁত এন্ট্রি, স্টপলস এবং টার্গেট দেওয়া আছে:</div>", unsafe_allow_html=True)
+
+        if not picks:
+            st.info("এই মুহূর্তে কোনো স্টক 'BUY' বা 'TRIGGER' জোনে নেই। বাজার সাইডওয়েজ বা রেজিস্ট্যান্সের নিচে রয়েছে।")
+        else:
+            cols = st.columns(2)
+            for i, p in enumerate(picks):
+                col = cols[i % 2]
+                with col:
+                    ch_str = f"+{p['Change %']}%" if p['Change %'] >= 0 else f"{p['Change %']}%"
+                    ch_col = "up" if p['Change %'] >= 0 else "down"
+                    l1h = "on" if p["_l1h"] else "off"
+                    l15 = "on" if p["_l15"] else "off"
+                    l5 = "on" if p["_l5"] else "off"
+
+                    st.markdown(f"""
+                    <div class="pick-card">
+                      <div class="pick-top">
+                        <div>
+                          <span class="pick-rank">#{i+1}</span>
+                          <span class="pick-name">{p['Stock']}</span>
+                          <span class="star">★ সেরা পিক</span>
+                          <div class="pick-sector">সেক্টর: {p['Sector']}</div>
+                        </div>
+                        <div class="pick-ltp">
+                          ₹{p['LTP']:,.2f}
+                          <span class="{ch_col}">({ch_str})</span>
+                        </div>
+                      </div>
+
+                      <div><span class="status-pill" style="color: {STATUS[p['_key']]['color']}; border: 1px solid {STATUS[p['_key']]['color']};">{p['Status']}</span></div>
+
+                      <div class="lamps">
+                        <span class="lamp {l1h}">1H ট্রেন্ড {('✅' if p["_l1h"] else '❌')}</span>
+                        <span class="lamp {l15}">15M ব্রেকআউট+ভলিউম {('✅' if p["_l15"] else '❌')}</span>
+                        <span class="lamp {l5}">5M কনফার্মেশন {('✅' if p["_l5"] else '❌')}</span>
+                      </div>
+
+                      <div class="levels">
+                        <div class="level"><div class="k">এন্ট্রি (Entry)</div><div class="v">₹{p['Entry']}</div></div>
+                        <div class="level sl"><div class="k">স্টপলস (SL)</div><div class="v">₹{p['Stop Loss']}</div></div>
+                        <div class="level tg"><div class="k">টার্গেট (Target)</div><div class="v">₹{p['Target']}</div></div>
+                      </div>
+
+                      <div class="stats">
+                        <div>রেজিস্ট্যান্স: <b>₹{p['Resistance']}</b></div>
+                        <div>দূরত্ব: <b>{p['Dist from Res %']}%</b></div>
+                        <div>ভলিউম: <b>{p['Volume x']}x</b></div>
+                        <div>RSI(15M): <b>{p['RSI 15M']}</b></div>
+                      </div>
+
+                      <div class="advice">💡 <b>পরামর্শ:</b> {p['Note']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+        st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+        with st.expander("📋 সমস্ত স্ক্যান করা স্টকের তালিকা ও ডিটেইলস দেখুন"):
+            df_all = pd.DataFrame(all_rows)
+            cols_to_show = ["Stock", "Sector", "Status", "LTP", "Change %", "Resistance", "Entry", "Stop Loss", "Target", "Volume x", "RSI 15M", "Note"]
+            if not df_all.empty:
+                st.dataframe(df_all[[c for c in cols_to_show if c in df_all.columns]], use_container_width=True, hide_index=True)
+
+    else:
+        st.info("ওপরের **'🚀 স্ক্যান শুরু করুন'** বাটনে ক্লিক করে আজকের মার্কেট স্ক্যান শুরু করুন।")
+
+if __name__ == "__main__":
+    main()
+    
