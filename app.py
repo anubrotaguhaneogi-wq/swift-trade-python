@@ -392,7 +392,7 @@ def scan_stock(sym, sector_name=""):
         trend = "Sideways"
 
     # Entry uses the retest/resistance level; risk has a minimum 2% floor.
-        entry = resistance if breakout else price
+    entry = resistance if breakout else price
     if signal == "BUY" and retest_low is not None:
         stop_loss = min(retest_low, entry) * 0.995
         risk = entry - stop_loss
