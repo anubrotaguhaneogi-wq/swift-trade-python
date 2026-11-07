@@ -1,276 +1,259 @@
+"""
+Swift Trade v2 | Multi-Timeframe Breakout Scanner (NSE)
+
+Logic in one line:
+  1H = trend direction | 15M = breakout + volume (main setup) | 5M = confirmation
+Output: best 6 stocks across all sectors, each with Entry / Stop Loss / Target.
+
+Requirements (requirements.txt):
+  streamlit
+  yfinance
+  pandas
+  numpy
+  streamlit-autorefresh   (optional - makes Auto Refresh work smoothly)
+"""
+
+import html
+import time
+
+import numpy as np
+import pandas as pd
 import streamlit as st
 import yfinance as yf
-import pandas as pd
-import numpy as np
-from datetime import datetime
-import time
+
+try:
+    from streamlit_autorefresh import st_autorefresh
+    HAS_AUTOREFRESH = True
+except Exception:
+    HAS_AUTOREFRESH = False
+
+# ==================== SETTINGS (change here if needed) ====================
+IST = "Asia/Kolkata"
+TOP_N = 6              # how many stocks to show
+RES_LOOKBACK = 20      # resistance = highest High of last 20 completed daily candles
+VOL_MULT = 1.5         # breakout volume must be >= 1.5x normal (same time of day)
+MAX_EXT = 2.0          # more than 2% above resistance = "late / overbought"
+RSI_MAX = 75           # 15M RSI above this = overbought
+NEAR_PCT = 1.0         # within 1% below resistance = "near breakout"
+GAP_PCT = 0.3          # day opened more than 0.3% above resistance = gap-up
+SL_PCT = 1.5           # stop loss = 1.5% below resistance ...
+ATR_BUF = 0.5          # ... minus half of the 15M ATR (extra breathing room)
+RR = 2.0               # target = Entry + 2 x risk
 
 # ==================== PAGE CONFIG ====================
 st.set_page_config(
     page_title="Swift Trade | Smart Stock Scanner",
     page_icon="📈",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
-# ==================== AUTO REFRESH ====================
-if "auto_refresh" not in st.session_state:
-    st.session_state.auto_refresh = False
-if "refresh_interval" not in st.session_state:
-    st.session_state.refresh_interval = 60
-if "last_refresh" not in st.session_state:
-    st.session_state.last_refresh = time.time()
+for _k, _v in {
+    "auto_refresh": False,
+    "refresh_interval": 120,
+    "last_scan_ts": 0.0,
+    "last_scan_label": "",
+    "picks": [],
+    "all_rows": [],
+    "skipped": [],
+    "n_scanned": 0,
+    "n_avoid": 0,
+}.items():
+    if _k not in st.session_state:
+        st.session_state[_k] = _v
 
-# ==================== CUSTOM CSS ====================
+# ==================== CSS ====================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+.stApp { background: linear-gradient(160deg, #0a0f1a 0%, #0d1b2a 40%, #0a1628 100%); color: #e0e6ed; }
+.block-container { max-width: 1400px; padding: 1rem 1.5rem 2rem 1.5rem; }
+#MainMenu, footer, header { visibility: hidden; }
+.stDeployButton { display: none; }
 
-html, body, [class*="css"] {
-    font-family: 'Inter', sans-serif;
-}
+.logo-area { display: flex; align-items: center; gap: 12px; }
+.logo-icon { background: linear-gradient(135deg, #00e676, #00c853); width: 42px; height: 42px;
+  border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.logo-text h1 { margin: 0; font-size: 1.6rem; font-weight: 800;
+  background: linear-gradient(90deg, #00e676, #00bcd4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.logo-text p { margin: 0; font-size: 0.75rem; color: #7a8ba3; }
 
-.stApp {
-    background: linear-gradient(160deg, #0a0f1a 0%, #0d1b2a 40%, #0a1628 100%);
-    color: #e0e6ed;
-}
+.index-card { background: linear-gradient(145deg, #0f2137, #0c1a2b); border: 1px solid #1a3a5c;
+  border-radius: 12px; padding: 14px 16px; height: 100%; }
+.index-name { font-size: 0.72rem; color: #7a8ba3; font-weight: 600; margin-bottom: 4px; }
+.index-value { font-size: 1.25rem; font-weight: 700; color: #ffffff; }
+.index-change-up { font-size: 0.8rem; color: #00e676; font-weight: 600; }
+.index-change-down { font-size: 0.8rem; color: #ff5252; font-weight: 600; }
 
-.block-container {
-    max-width: 1400px;
-    padding: 1rem 1.5rem 2rem 1.5rem;
-}
+.section-label { font-size: 0.85rem; font-weight: 600; color: #8ba3c7; margin-bottom: 8px; margin-top: 4px; }
 
-#MainMenu, footer, header {visibility: hidden;}
-.stDeployButton {display: none;}
+.banner { border-radius: 10px; padding: 10px 14px; font-size: 0.85rem; margin-bottom: 10px; }
+.banner.warn { background: #2e220a; border: 1px solid #5c4a1a; color: #ffd180; }
+.banner.info { background: #0d2b4e; border: 1px solid #1e4a7a; color: #9cc7f5; }
 
-.logo-area {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-.logo-icon {
-    background: linear-gradient(135deg, #00e676, #00c853);
-    width: 42px;
-    height: 42px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-}
-.logo-text h1 {
-    margin: 0;
-    font-size: 1.6rem;
-    font-weight: 800;
-    background: linear-gradient(90deg, #00e676, #00bcd4);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-}
-.logo-text p {
-    margin: 0;
-    font-size: 0.75rem;
-    color: #7a8ba3;
-}
+.summary-card { border-radius: 12px; padding: 14px 16px; height: 100%; }
+.summary-card.blue { background: linear-gradient(135deg, #0d2b4e, #0a1f3a); border: 1px solid #1e4a7a; }
+.summary-card.green { background: linear-gradient(135deg, #0a2e1a, #072416); border: 1px solid #1a5c30; }
+.summary-card.orange { background: linear-gradient(135deg, #2e220a, #241a07); border: 1px solid #5c4a1a; }
+.summary-card.red { background: linear-gradient(135deg, #2e0a0a, #240707); border: 1px solid #5c1a1a; }
+.summary-title { font-size: 0.78rem; color: #8ba3c7; font-weight: 500; margin-bottom: 4px; }
+.summary-value { font-size: 1.5rem; font-weight: 800; color: #ffffff; }
+.summary-sub { font-size: 0.72rem; color: #7a8ba3; margin-top: 2px; }
 
-.index-card {
-    background: linear-gradient(145deg, #0f2137, #0c1a2b);
-    border: 1px solid #1a3a5c;
-    border-radius: 12px;
-    padding: 14px 16px;
-    height: 100%;
-}
-.index-name {
-    font-size: 0.72rem;
-    color: #7a8ba3;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-.index-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: #ffffff;
-}
-.index-change-up {
-    font-size: 0.8rem;
-    color: #00e676;
-    font-weight: 600;
-}
-.index-change-down {
-    font-size: 0.8rem;
-    color: #ff5252;
-    font-weight: 600;
-}
+.pick-card { background: linear-gradient(145deg, #0f2137, #0c1a2b); border: 2px solid #1a3a5c;
+  border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; }
+.pick-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.pick-rank { color: #7a8ba3; font-weight: 700; font-size: 0.85rem; }
+.pick-name { font-size: 1.25rem; font-weight: 800; color: #ffffff; margin-left: 4px; }
+.pick-sector { font-size: 0.72rem; color: #7a8ba3; margin-top: 2px; }
+.pick-ltp { text-align: right; font-size: 1.05rem; font-weight: 700; color: #ffffff; }
+.pick-ltp .up { color: #00e676; font-size: 0.8rem; margin-left: 4px; }
+.pick-ltp .down { color: #ff5252; font-size: 0.8rem; margin-left: 4px; }
+.star { background: #ffd54f; color: #1a1200; font-size: 0.68rem; font-weight: 800;
+  padding: 2px 8px; border-radius: 20px; margin-left: 8px; }
+.status-pill { display: inline-block; margin: 10px 0 8px 0; padding: 4px 12px; border-radius: 20px;
+  font-weight: 700; font-size: 0.82rem; background: #0a1628; }
+.lamps { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.lamp { font-size: 0.74rem; font-weight: 600; padding: 3px 9px; border-radius: 6px; }
+.lamp.on { background: #0a2e1a; color: #00e676; border: 1px solid #1a5c30; }
+.lamp.off { background: #2e0a0a; color: #ff8a80; border: 1px solid #5c1a1a; }
+.levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; }
+.level { background: #0a1628; border-radius: 8px; padding: 6px 8px; }
+.level .k { font-size: 0.66rem; color: #7a8ba3; }
+.level .v { font-size: 0.95rem; font-weight: 700; color: #ffffff; }
+.level.sl .v { color: #ff8a80; }
+.level.tg .v { color: #69f0ae; }
+.stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.76rem; color: #8ba3c7; margin-bottom: 8px; }
+.stats b { color: #e0e6ed; }
+.advice { font-size: 0.8rem; color: #cfd8e3; border-top: 1px solid #12253a; padding-top: 8px; }
 
-.section-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #8ba3c7;
-    margin-bottom: 8px;
-    margin-top: 4px;
-}
-
-.summary-card {
-    border-radius: 12px;
-    padding: 16px 18px;
-    height: 100%;
-}
-.summary-card.blue {
-    background: linear-gradient(135deg, #0d2b4e, #0a1f3a);
-    border: 1px solid #1e4a7a;
-}
-.summary-card.green {
-    background: linear-gradient(135deg, #0a2e1a, #072416);
-    border: 1px solid #1a5c30;
-}
-.summary-card.orange {
-    background: linear-gradient(135deg, #2e220a, #241a07);
-    border: 1px solid #5c4a1a;
-}
-.summary-card.red {
-    background: linear-gradient(135deg, #2e0a0a, #240707);
-    border: 1px solid #5c1a1a;
-}
-.summary-title {
-    font-size: 0.78rem;
-    color: #8ba3c7;
-    font-weight: 500;
-    margin-bottom: 6px;
-}
-.summary-value {
-    font-size: 1.6rem;
-    font-weight: 800;
-    color: #ffffff;
-}
-.summary-sub {
-    font-size: 0.75rem;
-    color: #7a8ba3;
-    margin-top: 2px;
-}
-
-.bottom-card {
-    background: linear-gradient(145deg, #0f2137, #0c1a2b);
-    border: 1px solid #1a3a5c;
-    border-radius: 12px;
-    padding: 16px;
-    height: 100%;
-}
-.bottom-card h4 {
-    margin: 0 0 12px 0;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #e0e6ed;
-}
-.gainer-item, .loser-item, .watch-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 7px 0;
-    border-bottom: 1px solid #12253a;
-    font-size: 0.85rem;
-}
-.gainer-item:last-child, .loser-item:last-child, .watch-item:last-child {
-    border-bottom: none;
-}
-
-.stButton > button {
-    border-radius: 8px !important;
-    font-weight: 600 !important;
-    border: none !important;
-}
+.stButton > button { border-radius: 8px !important; font-weight: 600 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# ==================== DATA ====================
+# ==================== STOCK UNIVERSE ====================
 SECTORS = {
     "Bank": ["KOTAKBANK", "ICICIBANK", "SBIN", "HDFCBANK", "AXISBANK", "INDUSINDBK", "BANDHANBNK", "FEDERALBNK"],
     "IT": ["TCS", "HCLTECH", "INFY", "WIPRO", "TECHM", "LTIM", "PERSISTENT", "COFORGE"],
-    "Auto": ["M&M", "MARUTI", "BAJAJ-AUTO", "EICHERMOT", "TATAMOTORS", "HEROMOTOCO", "ASHOKLEY", "TVSMOTOR"],
+    "Auto": ["M&M", "MARUTI", "BAJAJ-AUTO", "EICHERMOT", "HEROMOTOCO", "ASHOKLEY", "TVSMOTOR"],
     "Pharma": ["DRREDDY", "DIVISLAB", "SUNPHARMA", "CIPLA", "APOLLOHOSP", "LUPIN", "AUROPHARMA", "BIOCON"],
     "Energy": ["RELIANCE", "ONGC", "COALINDIA", "NTPC", "POWERGRID", "BPCL", "IOC", "ADANIGREEN"],
     "FMCG": ["ITC", "HINDUNILVR", "NESTLEIND", "BRITANNIA", "DABUR", "MARICO", "GODREJCP", "TATACONSUM"],
     "Metal": ["TATASTEEL", "JSWSTEEL", "HINDALCO", "VEDL", "NMDC", "SAIL", "NATIONALUM", "JINDALSTEL"],
     "PSU": ["BEL", "HAL", "IRFC", "RVNL", "RECLTD", "PFC", "IRCTC", "NBCC"],
     "Defence": ["HAL", "BEL", "BHEL", "MAZDOCK", "COCHINSHIP", "BDL", "GRSE", "DATAPATTNS"],
-    "Others": ["ASIANPAINT", "TITAN", "TRENT", "ADANIENT", "ZOMATO", "PAYTM", "POLYCAB", "DIXON", "LT", "ULTRACEMCO"]
+    "Others": ["ASIANPAINT", "TITAN", "TRENT", "ADANIENT", "ETERNAL", "PAYTM", "POLYCAB", "DIXON", "LT", "ULTRACEMCO"],
 }
 
-INDEX_SYMBOLS = {
-    "NIFTY": "^NSEI",
-    "BANKNIFTY": "^NSEBANK",
-    "SENSEX": "^BSESN",
-    "INDIA VIX": "^INDIAVIX"
+INDEX_SYMBOLS = {"NIFTY": "^NSEI", "BANKNIFTY": "^NSEBANK", "SENSEX": "^BSESN", "INDIA VIX": "^INDIAVIX"}
+
+# ==================== STATUS DEFINITIONS ====================
+STATUS = {
+    "BUY":     {"label": "🟢 BUY NOW", "color": "#00e676", "prio": 0},
+    "TRIGGER": {"label": "🟡 ট্রিগার আসছে", "color": "#ffd54f", "prio": 1},
+    "NEAR":    {"label": "🟡 ব্রেকআউটের দোরগোড়ায়", "color": "#ffca28", "prio": 2},
+    "LATE":    {"label": "🟠 দেরি / ওভারবট", "color": "#ff9800", "prio": 3},
+    "WAIT":    {"label": "⚪ অপেক্ষা", "color": "#90a4ae", "prio": 4},
+    "AVOID":   {"label": "🔴 এড়িয়ে চলুন", "color": "#ff5252", "prio": 5},
 }
 
-@st.cache_data(ttl=45)
-def get_index_data(symbol):
-    try:
-        df = yf.download(symbol, period="5d", interval="5m", progress=False, auto_adjust=True)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        if len(df) < 2:
-            df = yf.download(symbol, period="5d", interval="1d", progress=False, auto_adjust=True)
+
+# ==================== TIME HELPERS ====================
+def now_ist():
+    return pd.Timestamp.now(tz=IST)
+
+
+def to_ist_index(df):
+    df = df.copy()
+    idx = pd.DatetimeIndex(df.index)
+    if idx.tz is None:
+        idx = idx.tz_localize("UTC").tz_convert(IST)
+    else:
+        idx = idx.tz_convert(IST)
+    df.index = idx
+    return df
+
+
+def clean_daily(df):
+    df = df.copy()
+    idx = pd.DatetimeIndex(df.index)
+    if idx.tz is not None:
+        idx = idx.tz_convert(IST).tz_localize(None)
+    df.index = idx.normalize()
+    return df
+
+
+def completed(df, minutes):
+    """Drop the candle that is still forming right now."""
+    if df is None or df.empty:
+        return df
+    cutoff = now_ist() + pd.Timedelta(seconds=20)
+    return df[(df.index + pd.Timedelta(minutes=minutes)) <= cutoff]
+
+
+def market_state():
+    t = now_ist()
+    mins = t.hour * 60 + t.minute
+    if t.weekday() >= 5:
+        return "closed", "আজ বাজার বন্ধ (শনি/রবি)। শেষ সেশনের ডেটা দেখানো হচ্ছে।"
+    if mins < 9 * 60 + 15:
+        return "closed", "বাজার এখনো খোলেনি। শেষ সেশনের ডেটা দেখানো হচ্ছে।"
+    if mins > 15 * 60 + 30:
+        return "closed", "বাজার বন্ধ। আজকের শেষ ডেটা দেখানো হচ্ছে।"
+    if mins < 9 * 60 + 30:
+        return "early", "৯:৩০ এর আগে সিগন্যাল ভরসাযোগ্য নয় (গ্যাপ ও এলোমেলো ওঠানামা)। ৯:৩০ এর পরে স্ক্যান করুন।"
+    if 11 * 60 + 30 <= mins <= 13 * 60 + 30:
+        return "slow", "এখন বাজার সাধারণত ঝিমিয়ে থাকে। নতুন এন্ট্রির সেরা সময় ৯:৪৫ থেকে ১০:৪৫।"
+    return "open", ""
+
+
+# ==================== DATA ====================
+@st.cache_data(ttl=45, show_spinner=False)
+def get_index_snapshot():
+    out = {}
+    for name, sym in INDEX_SYMBOLS.items():
+        try:
+            df = yf.download(sym, period="5d", interval="1d", progress=False, auto_adjust=True)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
-        if len(df) < 2:
-            return None
-        price = float(df["Close"].iloc[-1])
-        daily = yf.download(symbol, period="5d", interval="1d", progress=False, auto_adjust=True)
-        if isinstance(daily.columns, pd.MultiIndex):
-            daily.columns = daily.columns.get_level_values(0)
-        if len(daily) >= 2:
-            prev = float(daily["Close"].iloc[-2])
-        else:
-            prev = float(df["Close"].iloc[-2])
-        change = price - prev
-        pct = (change / prev) * 100 if prev else 0
-        return {"price": price, "change": change, "pct": pct}
-    except:
-        return None
+            df = df.dropna(subset=["Close"])
+            if len(df) >= 2:
+                price = float(df["Close"].iloc[-1])
+                prev = float(df["Close"].iloc[-2])
+                out[name] = {"price": price, "change": price - prev, "pct": (price / prev - 1) * 100 if prev else 0.0}
+        except Exception:
+            continue
+    return out
 
-@st.cache_data(ttl=60)
-def get_stock_data(sym):
-    """Fetch clean daily OHLCV data. Intraday prices never overwrite daily candles."""
+
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_batch(tickers, period, interval):
+    """One download call for many stocks. Returns {ticker: OHLCV dataframe}."""
+    out = {}
+    cols = ["Open", "High", "Low", "Close", "Volume"]
     try:
-        df = yf.download(
-            sym + ".NS",
-            period="1y",
-            interval="1d",
-            progress=False,
-            auto_adjust=True
-        )
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        required = ["Open", "High", "Low", "Close", "Volume"]
-        if not all(col in df.columns for col in required):
-            return pd.DataFrame()
-        return df[required].dropna()
+        raw = yf.download(list(tickers), period=period, interval=interval, group_by="ticker",
+                          auto_adjust=True, progress=False, threads=True)
     except Exception:
-        return pd.DataFrame()
+        return out
+    if raw is None or raw.empty:
+        return out
+    for t in tickers:
+        try:
+            d = raw[t] if isinstance(raw.columns, pd.MultiIndex) else raw
+            if not all(c in d.columns for c in cols):
+                continue
+            d = d[cols].dropna()
+            if len(d):
+                out[t] = d
+        except Exception:
+            continue
+    return out
 
 
-@st.cache_data(ttl=30)
-def get_live_price(sym):
-    """Get the latest intraday quote separately from daily historical candles."""
-    try:
-        intra = yf.download(
-            sym + ".NS",
-            period="1d",
-            interval="5m",
-            progress=False,
-            auto_adjust=True
-        )
-        if isinstance(intra.columns, pd.MultiIndex):
-            intra.columns = intra.columns.get_level_values(0)
-        if intra.empty or "Close" not in intra.columns:
-            return None
-        value = float(intra["Close"].iloc[-1])
-        return value if np.isfinite(value) and value > 0 else None
-    except Exception:
-        return None
-
-
+# ==================== INDICATORS ====================
 def calculate_rsi(series, period=14):
-    """Wilder-style RSI, with safe handling for flat/up-only/down-only series."""
     delta = series.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -280,427 +263,221 @@ def calculate_rsi(series, period=14):
     rsi = 100 - (100 / (1 + rs))
     rsi = rsi.where(avg_loss.ne(0), 100)
     rsi = rsi.where(avg_gain.ne(0), 0)
-    rsi = rsi.fillna(50)
-    return rsi
+    return rsi.fillna(50)
 
 
-def scan_stock(sym, sector_name=""):
-    """Original-style breakout + retest scanner, with live quote kept separate."""
-    df = get_stock_data(sym)
-    if df is None or len(df) < 60:
-        return None
+def calculate_atr(df, period=14):
+    prev_close = df["Close"].shift(1)
+    tr = pd.concat([
+        df["High"] - df["Low"],
+        (df["High"] - prev_close).abs(),
+        (df["Low"] - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    return tr.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
 
-    df = df[["Open", "High", "Low", "Close", "Volume"]].dropna()
-    if len(df) < 60:
-        return None
 
-    c = df["Close"].astype(float)
-    h = df["High"].astype(float)
-    l = df["Low"].astype(float)
-    v = df["Volume"].astype(float)
+def nz(x, default=0.0):
+    try:
+        x = float(x)
+        return x if np.isfinite(x) else default
+    except Exception:
+        return default
 
-    # Resistance/support use the 35 candles before the most recent 10 candles.
-    resistance_window = h.iloc[-45:-10]
-    support_window = l.iloc[-45:-10]
-    if resistance_window.empty or support_window.empty:
-        return None
 
-    resistance = float(resistance_window.max())
-    support = float(support_window.min())
-    if not np.isfinite(resistance) or resistance <= 0:
-        return None
+def slot_volume_ratio(c15, session_date, ts):
+    """Volume of one 15M candle vs the average of the same time slot on previous days."""
+    prior = c15[(c15["_date"] < session_date) & (c15["_tod"] == ts.time())]
+    if prior.empty:
+        return np.nan
+    avg = float(prior["Volume"].tail(10).mean())
+    cur = float(c15.loc[ts, "Volume"])
+    return cur / avg if avg > 0 else np.nan
 
-    # Find a breakout close in the latest 10 completed daily candles.
-    # FIX-03: Require confirmed breakout volume.
-    recent_start = max(0, len(c) - 11)
-    breakout_positions = [
-        i for i in range(recent_start, len(c) - 1)
-        if i >= 20
-        and float(c.iloc[i]) > resistance
-        and float(v.iloc[i-20:i].mean()) > 0
-        and float(v.iloc[i]) >= 1.5 * float(v.iloc[i-20:i].mean())
-    ]
-    breakout = bool(breakout_positions)
-    break_idx = -1
-    pullback = False
-    retest_low = None
 
-    # Find a breakout candle that is followed by a successful retest.
-    # Do not use the latest breakout candle blindly: later closes above
-    # resistance can otherwise hide an already-completed pullback.
-    band_low = resistance * 0.985
-    band_high = resistance * 1.015
-    for candidate_idx in breakout_positions:
-        for i in range(candidate_idx + 1, len(l)):
-            candle_low = float(l.iloc[i])
-            candle_close = float(c.iloc[i])
-            if i >= len(c) - 3 and band_low <= candle_low <= band_high and candle_close >= resistance:
-                break_idx = candidate_idx
-                pullback = True
-                retest_low = candle_low
-                break
-        if pullback:
-            break
+def day_volume_ratio(c15, session_date, last_tod):
+    """Today's total volume so far vs average of previous days up to the same time."""
+    cum_today = float(c15[c15["_date"] == session_date]["Volume"].sum())
+    prior = c15[(c15["_date"] < session_date) & (c15["_tod"] <= last_tod)]
+    if prior.empty:
+        return np.nan
+    avg = float(prior.groupby("_date")["Volume"].sum().tail(10).mean())
+    return cum_today / avg if avg > 0 else np.nan
 
-    # Daily indicators are based on daily candles only.
-    ema9_series = c.ewm(span=9, adjust=False).mean()
-    ema20_series = c.ewm(span=20, adjust=False).mean()
-    ema50_series = c.ewm(span=50, adjust=False).mean()
-    rsi_series = calculate_rsi(c, 14)
 
-    live_price = get_live_price(sym)
-    daily_close = float(c.iloc[-1])
-    price = float(live_price) if live_price is not None else daily_close
-    if not np.isfinite(price) or price <= 0:
-        return None
+# ==================== CORE ANALYSIS ====================
+def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
+    """Returns (result_dict, None) or (None, reason_for_skipping)."""
+    if d_daily is None or d_1h is None or d_15 is None or d_5 is None:
+        return None, "ডেটা পাওয়া যায়নি (টিকার বদলে গেছে কিনা দেখুন)"
 
-    # Keep current quote separate; use it only for current price/confirmation.
-    ema9 = float(ema9_series.iloc[-2])
-    ema20 = float(ema20_series.iloc[-2])
-    ema50 = float(ema50_series.iloc[-2])
-    rsi = float(rsi_series.iloc[-2])
-    prev_close = float(c.iloc[-2])
-    change_pct = ((price / prev_close) - 1) * 100 if prev_close else 0.0
+    # ---- 15M candles (completed only) ----
+    c15 = completed(to_ist_index(d_15), 15)
+    if c15 is None or len(c15) < 40:
+        return None, "১৫ মিনিটের ডেটা কম"
+    c15 = c15.copy()
+    c15["_date"] = c15.index.date
+    c15["_tod"] = c15.index.time
+    session_date = c15["_date"].iloc[-1]
+    today = c15[c15["_date"] == session_date]
+    if today.empty:
+        return None, "আজকের ১৫ মিনিটের ডেটা নেই"
+
+    # ---- Daily resistance (completed days before the session) ----
+    daily = clean_daily(d_daily)
+    comp = daily[daily.index < pd.Timestamp(session_date)]
+    if len(comp) < RES_LOOKBACK + 1:
+        return None, "দৈনিক ডেটা কম"
+    resistance = float(comp["High"].tail(RES_LOOKBACK).max())
+    prev_close = float(comp["Close"].iloc[-1])
+    if resistance <= 0 or prev_close <= 0:
+        return None, "ডেটা ত্রুটি"
+
+    # ---- 1H trend ----
+    h = to_ist_index(d_1h)["Close"].astype(float)
+    if len(h) < 60:
+        return None, "১ ঘণ্টার ডেটা কম"
+    ema20 = float(h.ewm(span=20, adjust=False).mean().iloc[-1])
+    ema50 = float(h.ewm(span=50, adjust=False).mean().iloc[-1])
+
+    # ---- 5M confirmation ----
+    f5 = to_ist_index(d_5)
+    price = nz(f5["Close"].iloc[-1], 0.0)
+    if price <= 0:
+        price = nz(c15["Close"].iloc[-1], 0.0)
+    if price <= 0:
+        return None, "দাম পাওয়া যায়নি"
+    cc5 = completed(f5, 5)
+    above_ema9 = False
+    conf5 = False
+    if cc5 is not None and len(cc5) >= 10:
+        ema9_5 = cc5["Close"].ewm(span=9, adjust=False).mean()
+        above_ema9 = float(cc5["Close"].iloc[-1]) > float(ema9_5.iloc[-1])
+        last3 = cc5.tail(3)
+        conf5 = bool((last3["Close"] > resistance).all() and above_ema9)
 
     trend_up = price > ema20 and ema20 > ema50
-    momentum = price > prev_close
-    rsi_ok = 55 <= rsi <= 70
-    breakout_holding = breakout and price >= resistance
+    trend_down = price < ema20 and ema20 < ema50
 
-    # Score is descriptive; BUY requires the core original setup, not a loose score.
-    score = sum([
-        bool(trend_up),
-        bool(breakout),
-        bool(pullback),
-        bool(momentum),
-        bool(rsi_ok),
-        bool(breakout_holding)
-    ])
+    # ---- 15M breakout detection ----
+    closes_above = today[today["Close"] > resistance]
+    broke_today = not closes_above.empty
+    holding = float(today["Close"].iloc[-1]) > resistance
+    breakout = broke_today and holding
+    gap = float(today["Open"].iloc[0]) > resistance * (1 + GAP_PCT / 100)
 
-    if breakout and pullback and breakout_holding and trend_up and momentum and rsi_ok:
-        signal = "BUY"
-    elif price < ema20 and ema20 < ema50 and not momentum and rsi < 45:
-        signal = "SELL"
+    break_time = ""
+    rvol_break = np.nan
+    if broke_today:
+        ts = closes_above.index[0]
+        break_time = ts.strftime("%H:%M")
+        rvol_break = slot_volume_ratio(c15, session_date, ts)
+
+    drv = day_volume_ratio(c15, session_date, today.index[-1].time())
+    vol_ratio = nz(max(nz(rvol_break, 0.0), nz(drv, 0.0)) if breakout else nz(drv, 0.0), 0.0)
+    vol_ok = vol_ratio >= VOL_MULT
+
+    rsi15 = nz(calculate_rsi(c15["Close"]).iloc[-1], 50.0)
+    atr15 = nz(calculate_atr(c15).iloc[-1], price * 0.003)
+
+    ext = (price / resistance - 1) * 100
+    change_pct = (price / prev_close - 1) * 100
+
+    # ---- Status ----
+    note = ""
+    if trend_down:
+        key, note = "AVOID", "১ ঘণ্টার ট্রেন্ড নিচের দিকে। এই স্টকে কিনবেন না।"
+    elif breakout:
+        if ext > MAX_EXT or rsi15 > RSI_MAX:
+            key, note = "LATE", "অনেক উপরে উঠে গেছে। ধাওয়া করবেন না, পুলব্যাকের অপেক্ষা করুন।"
+        elif not vol_ok:
+            key, note = "WAIT", "ব্রেকআউট হয়েছে কিন্তু ভলিউম কম। দুর্বল ব্রেকআউট, ঝুঁকি বেশি।"
+        elif not trend_up:
+            key, note = "WAIT", "১ ঘণ্টার ট্রেন্ড এখনো পরিষ্কার নয়। অপেক্ষা করুন।"
+        elif gap:
+            key, note = "TRIGGER", "গ্যাপ-আপে ব্রেকআউট। প্রথম পুলব্যাক ধরে রাখলে তবেই ঢুকুন।"
+        elif conf5:
+            key, note = "BUY", "১H, ১৫M, ৫M তিনটিই মিলেছে। স্টপলস মেনে এন্ট্রি নিতে পারেন।"
+        else:
+            key, note = "TRIGGER", "ভলিউমসহ ব্রেকআউট হয়েছে। ৫ মিনিটের নিশ্চিতকরণের জন্য আরেকটু অপেক্ষা করুন।"
+    elif broke_today and not holding:
+        key, note = "WAIT", "রেজিস্ট্যান্সের উপরে উঠে আবার নিচে নেমেছে (ফেক ব্রেকআউট)। এড়িয়ে চলুন।"
+    elif trend_up and ext >= -NEAR_PCT:
+        key, note = "NEAR", "রেজিস্ট্যান্সের খুব কাছে। ভলিউমসহ ১৫ মিনিটে ক্লোজ হলে তবেই ঢুকুন।"
     else:
-        signal = "WAIT"
+        key, note = "WAIT", "এখনো রেজিস্ট্যান্স থেকে দূরে বা সেটআপ তৈরি হয়নি।"
 
-    if trend_up:
-        trend = "Uptrend"
-    elif price < ema20 and ema20 < ema50:
-        trend = "Downtrend"
-    else:
-        trend = "Sideways"
+    # ---- Entry / Stop loss / Target ----
+    entry = price if breakout else resistance * 1.001
+    sl = resistance * (1 - SL_PCT / 100) - ATR_BUF * atr15
+    if sl >= entry:
+        sl = entry * (1 - SL_PCT / 100)
+    target = entry + RR * (entry - sl)
 
-    # Entry uses the retest/resistance level; risk has a minimum 2% floor.
-    entry = resistance if breakout else price
-    if signal == "BUY" and retest_low is not None:
-        stop_loss = min(retest_low, entry) * 0.995
-        risk = entry - stop_loss
-    else:
-        risk = max(entry - support, price * 0.02)
-        stop_loss = entry - risk
+    l1h = bool(trend_up)
+    l15 = bool(breakout and vol_ok)
+    l5 = bool(conf5 if breakout else above_ema9)
 
-    target = entry + (risk * 2)
+    # ---- Ranking score (higher = better, inside the same status) ----
+    score = (min(vol_ratio, 4.0) * 2
+             + (1.0 if l5 else 0.0)
+             + (1.0 if 55 <= rsi15 <= 70 else 0.0)
+             - abs(ext) * 0.5)
 
     return {
         "Stock": sym,
+        "Sector": sector,
+        "Status": STATUS[key]["label"],
         "LTP": round(price, 2),
         "Change %": round(change_pct, 2),
-        "Trend": trend,
-        "Signal": signal,
+        "Resistance": round(resistance, 2),
+        "Dist from Res %": round(ext, 2),
         "Entry": round(entry, 2),
+        "Stop Loss": round(sl, 2),
         "Target": round(target, 2),
-        "Stop Loss": round(stop_loss, 2),
-        "Sector": sector_name,
-        "_score": int(score),
-        "_rsi": round(rsi, 1)
-    }
+        "Volume x": round(vol_ratio, 2),
+        "RSI 15M": round(rsi15, 1),
+        "Breakout Time": break_time,
+        "Note": note,
+        "_key": key,
+        "_prio": STATUS[key]["prio"],
+        "_score": score,
+        "_l1h": l1h,
+        "_l15": l15,
+        "_l5": l5,
+    }, None
 
-# ==================== HEADER ====================
-col_logo, col_search, col_time, col_bell = st.columns([2.5, 3, 1.8, 0.5])
 
-with col_logo:
-    st.markdown("""
-    <div class="logo-area">
-        <div class="logo-icon">📈</div>
-        <div class="logo-text">
-            <h1>Swift Trade</h1>
-            <p>Smart Stock Scanner · এক ক্লিকে সেরা শেয়ার</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_search:
-    search_query = st.text_input("search", placeholder="🔍 স্টক নাম লিখুন...", label_visibility="collapsed")
-
-with col_time:
-    now = datetime.now()
-    st.markdown(f"""
-    <div style="text-align:right; padding-top:8px;">
-        <div style="font-size:0.9rem; font-weight:600; color:#e0e6ed;">📅 {now.strftime('%d %b %Y')}</div>
-        <div style="font-size:0.8rem; color:#7a8ba3;">{now.strftime('%I:%M %p')}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_bell:
-    st.markdown("<div style='text-align:center; padding-top:10px; font-size:1.4rem;'>🔔</div>", unsafe_allow_html=True)
-
-st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-# ==================== INDEX CARDS ====================
-idx_cols = st.columns(4)
-index_names = ["NIFTY", "BANKNIFTY", "SENSEX", "INDIA VIX"]
-
-for i, name in enumerate(index_names):
-    with idx_cols[i]:
-        data = get_index_data(INDEX_SYMBOLS[name])
-        if data:
-            is_up = data["pct"] >= 0
-            change_class = "index-change-up" if is_up else "index-change-down"
-            arrow = "▲" if is_up else "▼"
-            st.markdown(f"""
-            <div class="index-card">
-                <div class="index-name">{name}</div>
-                <div class="index-value">{data['price']:,.2f}</div>
-                <div class="{change_class}">{arrow} {data['change']:+.2f} ({data['pct']:+.2f}%)</div>
-            </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div class="index-card">
-                <div class="index-name">{name}</div>
-                <div class="index-value">--</div>
-                <div class="index-change-up">Loading...</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-# ==================== MARKET SELECTOR ====================
-st.markdown('<div class="section-label">Market</div>', unsafe_allow_html=True)
-asset = st.radio("Market", ["Equity", "F&O", "Forex", "Commodities", "Crypto"], horizontal=True, label_visibility="collapsed", index=0)
-# ==================== F&O ENGINE ====================
-FNO_UNDERLYINGS = {
-    "NIFTY": "^NSEI",
-    "BANKNIFTY": "^NSEBANK",
-    "FINNIFTY": "NIFTY_FIN_SERVICE",
-    "MIDCPNIFTY": "NIFTY_MID_SELECT"
-}
-
-FNO_REQUIRED_FIELDS = [
-    "Strike",
-    "Expiry",
-    "Option Type",
-    "LTP",
-    "OI",
-    "Change OI",
-    "Volume",
-    "IV"
-            ]
-
-# ==================== COMMODITY ENGINE ====================
-COMMODITY_SYMBOLS = {
-    "GOLD": "GC=F",
-    "SILVER": "SI=F",
-    "CRUDE OIL": "CL=F",
-    "NATURAL GAS": "NG=F"
-}
-
-COMMODITY_INDICATORS = [
-    "Price",
-    "Change %",
-    "EMA 9",
-    "EMA 20",
-    "EMA 50",
-    "RSI 14",
-    "ATR 14",
-    "Volume Ratio"
-            ]
-# ==================== SECTOR SELECTOR ====================
-st.markdown('<div class="section-label">Sector</div>', unsafe_allow_html=True)
-all_sectors = list(SECTORS.keys())
-selected_sectors = st.multiselect("Sector", ["ALL"] + all_sectors, default=["ALL"], label_visibility="collapsed")
-
-if "ALL" in selected_sectors or not selected_sectors:
-    active_sectors = all_sectors
-else:
-    active_sectors = [s for s in selected_sectors if s != "ALL"]
-
-# ==================== STRATEGY SELECTOR ====================
-st.markdown('<div class="section-label">Strategy</div>', unsafe_allow_html=True)
-strat_col1, strat_col2 = st.columns([4, 1.2])
-
-with strat_col1:
-    strategies = st.multiselect("Strategy", ["Breakout", "Momentum", "Pullback", "Trend"], default=["Breakout", "Momentum"], label_visibility="collapsed")
-
-with strat_col2:
-    scan_clicked = st.button("🔍 Scan / Analyze", type="primary", use_container_width=True)
-
-# ==================== AUTO REFRESH CONTROLS ====================
-ref_col1, ref_col2, ref_col3 = st.columns([1.5, 1.5, 3])
-
-with ref_col1:
-    auto_refresh = st.checkbox("🔄 Auto Refresh", value=st.session_state.auto_refresh, key="auto_refresh_cb")
-    st.session_state.auto_refresh = auto_refresh
-
-with ref_col2:
-    interval = st.selectbox("Interval", options=[30, 60, 120, 300], format_func=lambda x: f"{x} sec" if x < 60 else f"{x//60} min", index=1, label_visibility="collapsed", key="refresh_interval_select")
-    st.session_state.refresh_interval = interval
-
-with ref_col3:
-    if st.session_state.auto_refresh:
-        elapsed = int(time.time() - st.session_state.last_refresh)
-        remaining = max(0, st.session_state.refresh_interval - elapsed)
-        st.markdown(f"<div style='padding-top:8px; color:#00e676; font-size:0.85rem;'>⏳ Next refresh in <b>{remaining}s</b></div>", unsafe_allow_html=True)
-    else:
-        st.markdown("<div style='padding-top:8px; color:#7a8ba3; font-size:0.85rem;'>Auto refresh off</div>", unsafe_allow_html=True)
-
-st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-
-# ==================== SCAN LOGIC ====================
-if "results" not in st.session_state:
-    st.session_state.results = []
-if "watchlist" not in st.session_state:
-    st.session_state.watchlist = set()
-
-should_scan = scan_clicked
-
-if st.session_state.auto_refresh:
-    elapsed = time.time() - st.session_state.last_refresh
-    if elapsed >= st.session_state.refresh_interval:
-        should_scan = True
-        st.session_state.last_refresh = time.time()
-
-if should_scan:
-    symbols_to_scan = []
-    sector_map = {}
+def run_scan(active_sectors):
+    sym_sector = {}
     for sec in active_sectors:
-        for sym in SECTORS[sec]:
-            if sym not in sector_map:
-                symbols_to_scan.append(sym)
-                sector_map[sym] = sec
+        for s in SECTORS[sec]:
+            if s not in sym_sector:
+                sym_sector[s] = sec
+    symbols = list(sym_sector.keys())
+    tickers = tuple(s + ".NS" for s in symbols)
 
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-    results = []
+    bar = st.progress(0, text="দৈনিক ডেটা আনা হচ্ছে...")
+    daily = fetch_batch(tickers, "6mo", "1d")
+    bar.progress(25, text="১ ঘণ্টার ডেটা আনা হচ্ছে...")
+    h1 = fetch_batch(tickers, "3mo", "1h")
+    bar.progress(50, text="১৫ মিনিটের ডেটা আনা হচ্ছে...")
+    m15 = fetch_batch(tickers, "1mo", "15m")
+    bar.progress(75, text="৫ মিনিটের ডেটা আনা হচ্ছে...")
+    m5 = fetch_batch(tickers, "5d", "5m")
+    bar.progress(90, text="বিশ্লেষণ চলছে...")
 
-    for i, sym in enumerate(symbols_to_scan):
-        status_text.markdown(f"<span style='color:#7a8ba3; font-size:0.85rem;'>Scanning {sym}... ({i+1}/{len(symbols_to_scan)})</span>", unsafe_allow_html=True)
-        r = scan_stock(sym, sector_map.get(sym, ""))
-        if r:
-            results.append(r)
-        progress_bar.progress((i + 1) / max(1, len(symbols_to_scan)))
-
-    progress_bar.empty()
-    status_text.empty()
-
-    results.sort(key=lambda x: (x["_score"], x["Change %"]), reverse=True)
-    st.session_state.results = results
-    st.session_state.last_refresh = time.time()
-    st.toast(f"✅ {len(results)} টি স্টক স্ক্যান সম্পন্ন!", icon="📈")
-results = st.session_state.get("results", [])
-b1, b2 = st.columns(2)
-
-# ==================== SUMMARY CARDS ====================
-if results:
-    total = len(results)
-    buy_count = sum(1 for x in results if x["Signal"] == "BUY")
-    wait_count = sum(1 for x in results if x["Signal"] == "WAIT")
-    sell_count = sum(1 for x in results if x["Signal"] == "SELL")
-    uptrend_count = sum(1 for x in results if x["Trend"] == "Uptrend")
-
-    s1, s2, s3, s4 = st.columns(4)
-
-    with s1:
-        st.markdown(f"""
-        <div class="summary-card blue">
-            <div class="summary-title">📊 মোট শেয়ার</div>
-            <div class="summary-value">{total}</div>
-            <div class="summary-sub">স্ক্যান করা হয়েছে</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with s2:
-        pct = (uptrend_count / total * 100) if total else 0
-
-        st.markdown(f"""
-        <div class="summary-card green">
-            <div class="summary-title">📈 আপ ট্রেন্ড</div>
-            <div class="summary-value">{uptrend_count}</div>
-            <div class="summary-sub">{pct:.1f}% শেয়ার</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with s3:
-        st.markdown(f"""
-        <div class="summary-card orange">
-            <div class="summary-title">⏳ BUY / WAIT</div>
-            <div class="summary-value">{buy_count} / {wait_count}</div>
-            <div class="summary-sub">সিগন্যালের সংখ্যা</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    with s4:
-        st.markdown(f"""
-        <div class="summary-card red">
-            <div class="summary-title">🔻 SELL</div>
-            <div class="summary-value">{sell_count}</div>
-            <div class="summary-sub">সতর্কতার সিগন্যাল</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-    st.markdown('<div class="section-label">স্ক্যান রেজাল্ট</div>', unsafe_allow_html=True)
-
-    table_data = results[:6]
-    df_display = pd.DataFrame(table_data).drop(
-        columns=["_score", "_rsi"], errors="ignore"
-    )
-
-    if search_query:
-        mask = df_display["Stock"].astype(str).str.contains(
-            search_query.strip(), case=False, na=False
-        )
-        df_display = df_display[mask]
-
-    def color_change(val):
+    rows, skipped = [], []
+    for sym in symbols:
+        t = sym + ".NS"
         try:
-            return "color: #00e676; font-weight: 700" if float(val) >= 0 else "color: #ff5252; font-weight: 700"
-        except (TypeError, ValueError):
-            return ""
+            r, why = analyze(sym, sym_sector[sym], daily.get(t), h1.get(t), m15.get(t), m5.get(t))
+        except Exception as e:  # one bad stock must never stop the scan
+            r, why = None, f"ত্রুটি: {type(e).__name__}"
+        if r:
+            rows.append(r)
+        else:
+            skipped.append(f"{sym}: {why}")
+    bar.empty()
 
-    def color_signal(val):
-        if "BUY" in str(val):
-            return "color: #00e676; font-weight: 700"
-        elif "WAIT" in str(val):
-            return "color: #ffb74d; font-weight: 700"
-        elif "SELL" in str(val):
-            return "color: #ff5252; font-weight: 700"
-        return ""
-
-    if not df_display.empty:
-        styled = (
-            df_display.style
-            .map(color_change, subset=["Change %"])
-            .map(color_signal, subset=["Signal"])
-        )
-        st.dataframe(
-            styled,
-            use_container_width=True,
-            hide_index=True,
-            height=min(420, 45 + len(df_display) * 38)
-        )
-    else:
-        st.info("আপনার সার্চ অনুযায়ী কোনো স্টক পাওয়া যায়নি।")
-else:
-    st.info("কোনো রেজাল্ট পাওয়া যায়নি।")
-
-st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
-
-# ==================== BOTTOM SECTION ====================
-st.markdown("---")
-st.markdown(
-    "<p style='text-align: center; color: gray;'>Swift Trade Scanner v1.0</p>",
-    unsafe_allow_html=True
-        )
-        
+    ranked = sorted(rows, key=lambda x: (x["_prio"], -x["_score"]))
+    candidates = [r for r in ranked if r["_key"] != "AVO
