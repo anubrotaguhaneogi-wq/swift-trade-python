@@ -396,9 +396,9 @@ def scan_stock(sym, sector_name=""):
     if signal == "BUY" and retest_low is not None:
         stop_loss = min(retest_low, entry) * 0.995
         risk = entry - stop_loss
-else:
-    risk = max(entry - support, price * 0.02)
-    stop_loss = entry - risk
+    else:
+        risk = max(entry - support, price * 0.02)
+        stop_loss = entry - risk
 
     target = entry + (risk * 2)
 
