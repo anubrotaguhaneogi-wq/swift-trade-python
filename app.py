@@ -753,7 +753,7 @@ def main():
         with st.expander("📋 সমস্ত স্ক্যান করা স্টকের তালিকা ও ডিটেইলস দেখুন"):
             df_all = pd.DataFrame(all_rows)
             cols_to_show = ["Stock", "Sector", "Status", "LTP", "Change %", "Resistance", "Entry", "Stop Loss", "Target", "Risk %", "Volume x", "RSI 15M", "Breakout Time", "Note"]
-                        if not df_all.empty:
+            if not df_all.empty:
                 st.dataframe(df_all[[c for c in cols_to_show if c in df_all.columns]], use_container_width=True, hide_index=True)
 
         skipped = st.session_state["skipped"]
