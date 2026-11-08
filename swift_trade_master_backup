@@ -374,14 +374,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     breakout = bool(above[-1]) and price > resistance
     gap = float(today["Open"].iloc[0]) > resistance * (1 + GAP_PCT / 100)
 
-    # start of the CURRENT run above resistance (handles break -> fall -> re-break correctly)
-    break_time = ""
-    rvol_break = np.nan
-    bars_since = 999
-    if above[-1]:
-        i = n_today - 1
-        while i >= 0 and above[i]:
-            i -= 1
+
 
 
     # start of the CURRENT run above resistance (handles break -> fall -> re-break correctly)
