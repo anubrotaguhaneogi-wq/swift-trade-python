@@ -712,8 +712,7 @@ def main():
                       <div class="pick-top">
                         <div>
                           <span class="pick-rank">#{i+1}</span>
-                          <span class="pick-name">{p['Stock']}</span>
-                          {star_html}
+                          <span class="pick-name">{p['Stock']}</span>{star_html}
                           <div class="pick-sector">সেক্টর: {p['Sector']}</div>
                         </div>
                         <div class="pick-ltp">
