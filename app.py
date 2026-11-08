@@ -1,5 +1,5 @@
 """
-Swift Trade v2 | Multi-Timeframe Breakout Scanner (NSE)
+Swift Trade v3 | Multi-Timeframe Breakout Scanner (NSE)
 
 Logic in one line:
   1H = trend direction | 15M = breakout + volume (main setup) | 5M = confirmation
@@ -10,10 +10,11 @@ Requirements (requirements.txt):
   yfinance
   pandas
   numpy
-  streamlit-autorefresh   (optional - makes Auto Refresh work smoothly)
+  streamlit-autorefresh   (needed for Auto Refresh to work)
+
+NOTE: This file is saved in TWO parts. Part 1 first, then Part 2 pasted right below it.
 """
 
-import html
 import time
 
 import numpy as np
@@ -39,6 +40,8 @@ GAP_PCT = 0.3          # day opened more than 0.3% above resistance = gap-up
 SL_PCT = 1.5           # stop loss = 1.5% below resistance ...
 ATR_BUF = 0.5          # ... minus half of the 15M ATR (extra breathing room)
 RR = 2.0               # target = Entry + 2 x risk
+FRESH_BARS = 6         # breakout is "fresh" if it happened within last 6 x 15M candles (1.5 hours)
+STALE_MIN = 10         # warn if latest data is older than this many minutes (market hours)
 
 # ==================== PAGE CONFIG ====================
 st.set_page_config(
@@ -53,6 +56,10 @@ for _k, _v in {
     "refresh_interval": 120,
     "last_scan_ts": 0.0,
     "last_scan_label": "",
+    "last_candle_label": "",
+    "data_lag_min": None,
+    "scanned_once": False,
+    "prev_buy": set(),
     "picks": [],
     "all_rows": [],
     "skipped": [],
@@ -181,6 +188,7 @@ def clean_daily(df):
     return df
 
 def completed(df, minutes):
+    """Keep only fully-closed candles (the running candle is dropped)."""
     if df is None or df.empty:
         return df
     cutoff = now_ist() + pd.Timedelta(seconds=20)
@@ -219,8 +227,7 @@ def get_index_snapshot():
             continue
     return out
 
-@st.cache_data(ttl=60, show_spinner=False)
-def fetch_batch(tickers, period, interval):
+def _download(tickers, period, interval):
     out = {}
     cols = ["Open", "High", "Low", "Close", "Volume"]
     try:
@@ -241,6 +248,19 @@ def fetch_batch(tickers, period, interval):
         except Exception:
             continue
     return out
+
+# Slow-changing data is cached longer, fast-changing data only 60 seconds.
+@st.cache_data(ttl=900, show_spinner=False)
+def fetch_daily(tickers, period, interval):
+    return _download(tickers, period, interval)
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_hourly(tickers, period, interval):
+    return _download(tickers, period, interval)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_fast(tickers, period, interval):
+    return _download(tickers, period, interval)
 
 # ==================== INDICATORS ====================
 def calculate_rsi(series, period=14):
@@ -286,7 +306,10 @@ def day_volume_ratio(c15, session_date, last_tod):
         return np.nan
     avg = float(prior.groupby("_date")["Volume"].sum().tail(10).mean())
     return cum_today / avg if avg > 0 else np.nan
-      # ==================== CORE ANALYSIS ====================
+
+# ===== END OF PART 1 — paste PART 2 right below this line =====
+
+# ==================== CORE ANALYSIS ====================
 def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     """Returns (result_dict, None) or (None, reason_for_skipping)."""
     if d_daily is None or d_1h is None or d_15 is None or d_5 is None:
@@ -314,20 +337,23 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     if resistance <= 0 or prev_close <= 0:
         return None, "ডেটা ত্রুটি"
 
-    # ---- 1H trend ----
-    h = to_ist_index(d_1h)["Close"].astype(float)
-    if len(h) < 60:
-        return None, "১ ঘণ্টার ডেটা কম"
-    ema20 = float(h.ewm(span=20, adjust=False).mean().iloc[-1])
-    ema50 = float(h.ewm(span=50, adjust=False).mean().iloc[-1])
-
-    # ---- 5M confirmation ----
+    # ---- Live price + 5M data ----
     f5 = to_ist_index(d_5)
     price = nz(f5["Close"].iloc[-1], 0.0)
     if price <= 0:
         price = nz(c15["Close"].iloc[-1], 0.0)
     if price <= 0:
         return None, "দাম পাওয়া যায়নি"
+    data_ts = f5.index[-1]
+
+    # ---- 1H trend (completed 1H candles only, so the signal does not flicker) ----
+    h = completed(to_ist_index(d_1h), 60)["Close"].astype(float)
+    if len(h) < 60:
+        return None, "১ ঘণ্টার ডেটা কম"
+    ema20 = float(h.ewm(span=20, adjust=False).mean().iloc[-1])
+    ema50 = float(h.ewm(span=50, adjust=False).mean().iloc[-1])
+
+    # ---- 5M confirmation ----
     cc5 = completed(f5, 5)
     above_ema9 = False
     conf5 = False
@@ -341,18 +367,27 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     trend_down = price < ema20 and ema20 < ema50
 
     # ---- 15M breakout detection ----
-    closes_above = today[today["Close"] > resistance]
-    broke_today = not closes_above.empty
-    holding = float(today["Close"].iloc[-1]) > resistance
-    breakout = broke_today and holding
+    above = (today["Close"] > resistance).tolist()
+    n_today = len(above)
+    broke_today = any(above)
+    # breakout = last completed 15M candle closed above resistance AND live price is still above it
+    breakout = bool(above[-1]) and price > resistance
     gap = float(today["Open"].iloc[0]) > resistance * (1 + GAP_PCT / 100)
 
+    # start of the CURRENT run above resistance (handles break -> fall -> re-break correctly)
     break_time = ""
     rvol_break = np.nan
-    if broke_today:
-        ts = closes_above.index[0]
+    bars_since = 999
+    if above[-1]:
+        i = n_today - 1
+        while i >= 0 and above[i]:
+            i -= 1
+        streak_start = i + 1
+        ts = today.index[streak_start]
         break_time = ts.strftime("%H:%M")
         rvol_break = slot_volume_ratio(c15, session_date, ts)
+        bars_since = n_today - 1 - streak_start
+    fresh = bars_since <= FRESH_BARS
 
     drv = day_volume_ratio(c15, session_date, today.index[-1].time())
     vol_ratio = nz(max(nz(rvol_break, 0.0), nz(drv, 0.0)) if breakout else nz(drv, 0.0), 0.0)
@@ -371,6 +406,8 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     elif breakout:
         if ext > MAX_EXT or rsi15 > RSI_MAX:
             key, note = "LATE", "অনেক উপরে উঠে গেছে। ধাওয়া করবেন না, পুলব্যাকের অপেক্ষা করুন।"
+        elif not fresh:
+            key, note = "LATE", f"ব্রেকআউট {break_time} এ হয়েছে, এখন আর ফ্রেশ নয়। পুলব্যাকের অপেক্ষা করুন।"
         elif not vol_ok:
             key, note = "WAIT", "ব্রেকআউট হয়েছে কিন্তু ভলিউম কম। দুর্বল ব্রেকআউট, ঝুঁকি বেশি।"
         elif not trend_up:
@@ -381,7 +418,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
             key, note = "BUY", "১H, ১৫M, ৫M তিনটিই মিলেছে। স্টপলস মেনে এন্ট্রি নিতে পারেন।"
         else:
             key, note = "TRIGGER", "ভলিউমসহ ব্রেকআউট হয়েছে। ৫ মিনিটের নিশ্চিতকরণের জন্য আরেকটু অপেক্ষা করুন।"
-    elif broke_today and not holding:
+    elif broke_today:
         key, note = "WAIT", "রেজিস্ট্যান্সের উপরে উঠে আবার নিচে নেমেছে (ফেক ব্রেকআউট)। এড়িয়ে চলুন।"
     elif trend_up and ext >= -NEAR_PCT:
         key, note = "NEAR", "রেজিস্ট্যান্সের খুব কাছে। ভলিউমসহ ১৫ মিনিটে ক্লোজ হলে তবেই ঢুকুন।"
@@ -394,6 +431,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     if sl >= entry:
         sl = entry * (1 - SL_PCT / 100)
     target = entry + RR * (entry - sl)
+    risk_pct = (entry - sl) / entry * 100 if entry > 0 else 0.0
 
     l1h = bool(trend_up)
     l15 = bool(breakout and vol_ok)
@@ -403,6 +441,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     score = (min(vol_ratio, 4.0) * 2
              + (1.0 if l5 else 0.0)
              + (1.0 if 55 <= rsi15 <= 70 else 0.0)
+             + (1.0 if (breakout and fresh) else 0.0)
              - abs(ext) * 0.5)
 
     return {
@@ -416,6 +455,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
         "Entry": round(entry, 2),
         "Stop Loss": round(sl, 2),
         "Target": round(target, 2),
+        "Risk %": round(risk_pct, 2),
         "Volume x": round(vol_ratio, 2),
         "RSI 15M": round(rsi15, 1),
         "Breakout Time": break_time,
@@ -426,10 +466,11 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
         "_l1h": l1h,
         "_l15": l15,
         "_l5": l5,
+        "_data_ts": data_ts,
     }, None
 
 
-def run_scan(active_sectors):
+def run_scan(active_sectors, force=False):
     sym_sector = {}
     for sec in active_sectors:
         for s in SECTORS[sec]:
@@ -438,14 +479,22 @@ def run_scan(active_sectors):
     symbols = list(sym_sector.keys())
     tickers = tuple(s + ".NS" for s in symbols)
 
+    # Manual click = always pull fresh intraday data (skip the 60 s / 5 min cache)
+    if force:
+        fetch_fast.clear()
+        fetch_hourly.clear()
+
     bar = st.progress(0, text="দৈনিক ডেটা আনা হচ্ছে...")
-    daily = fetch_batch(tickers, "6mo", "1d")
+    daily = fetch_daily(tickers, "6mo", "1d")
+    if not daily:  # never keep a failed (empty) download in cache
+        fetch_daily.clear()
+        daily = fetch_daily(tickers, "6mo", "1d")
     bar.progress(25, text="১ ঘণ্টার ডেটা আনা হচ্ছে...")
-    h1 = fetch_batch(tickers, "3mo", "1h")
+    h1 = fetch_hourly(tickers, "3mo", "1h")
     bar.progress(50, text="১৫ মিনিটের ডেটা আনা হচ্ছে...")
-    m15 = fetch_batch(tickers, "1mo", "15m")
+    m15 = fetch_fast(tickers, "1mo", "15m")
     bar.progress(75, text="৫ মিনিটের ডেটা আনা হচ্ছে...")
-    m5 = fetch_batch(tickers, "5d", "5m")
+    m5 = fetch_fast(tickers, "5d", "5m")
     bar.progress(90, text="বিশ্লেষণ চলছে...")
 
     rows, skipped = [], []
@@ -464,6 +513,11 @@ def run_scan(active_sectors):
     time.sleep(0.3)
     bar.empty()
     return rows, skipped
+
+
+def tv_symbol(sym):
+    """TradingView ticker format (hyphen / & become underscore)."""
+    return "NSE:" + sym.replace("-", "_").replace("&", "_")
 
 # ==================== MAIN UI ====================
 def main():
@@ -486,7 +540,9 @@ def main():
                 st.session_state["auto_refresh"] = ar_on
                 st.rerun()
             if st.session_state["auto_refresh"]:
-                st_autorefresh(interval=120000, key="datarefresh")
+                st_autorefresh(interval=st.session_state["refresh_interval"] * 1000, key="datarefresh")
+        else:
+            st.caption("অটো রিফ্রেশের জন্য requirements.txt-এ streamlit-autorefresh যোগ করুন")
 
     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
@@ -508,10 +564,13 @@ def main():
 
     st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
 
-    # Sidebar / Controls
-    with st.expander("⚙️ সেক্টর ও সেটিংস ফিল্টার (ক্লিক করে খুলুন)", expanded=False):
-        all_secs = list(SECTORS.keys())
-        selected_sectors = st.multiselect("সেক্টর নির্বাচন করুন:", all_secs, default=all_secs)
+    # Sector filter
+    all_secs = list(SECTORS.keys())
+    selected_sectors = all_secs
+    with st.expander("⚙ সেক্টর ও সেটিংস ফিল্টার (ক্লিক করে খুলুন)", expanded=False):
+        chosen = st.multiselect("সেক্টর নির্বাচন করুন:", all_secs, default=all_secs)
+        if chosen:
+            selected_sectors = chosen
 
     m_status, m_msg = market_state()
     if m_msg:
@@ -522,7 +581,7 @@ def main():
     with c_scan:
         scan_clicked = st.button("🚀 স্ক্যান শুরু করুন", type="primary", use_container_width=True)
     with c_clear:
-        clear_clicked = st.button("🗑️ রিসেট", use_container_width=True)
+        clear_clicked = st.button("🗑 রিসেট", use_container_width=True)
 
     if clear_clicked:
         st.session_state["picks"] = []
@@ -530,15 +589,38 @@ def main():
         st.session_state["skipped"] = []
         st.session_state["n_scanned"] = 0
         st.session_state["n_avoid"] = 0
+        st.session_state["prev_buy"] = set()
+        st.session_state["scanned_once"] = True   # stay blank until the next scan click
         st.rerun()
 
-    if scan_clicked or (not st.session_state["all_rows"] and not scan_clicked):
-        secs_to_scan = selected_sectors if 'selected_sectors' in locals() and selected_sectors else list(SECTORS.keys())
-        rows, skipped = run_scan(secs_to_scan)
-        
+    # ---- When to scan: first load, manual click, or auto-refresh due (market hours only) ----
+    auto_due = (
+        HAS_AUTOREFRESH
+        and st.session_state["auto_refresh"]
+        and m_status != "closed"
+        and (time.time() - st.session_state["last_scan_ts"]) >= (st.session_state["refresh_interval"] - 5)
+    )
+    if scan_clicked or auto_due or not st.session_state["scanned_once"]:
+        rows, skipped = run_scan(selected_sectors, force=scan_clicked)
+
         valid = [r for r in rows if r["_key"] != "AVOID"]
         valid.sort(key=lambda x: (x["_prio"], -x["_score"]))
         picks = valid[:TOP_N]
+
+        # Alert when a stock newly turns BUY since the previous scan
+        buy_now = {r["Stock"] for r in rows if r["_key"] == "BUY"}
+        new_buy = buy_now - st.session_state["prev_buy"]
+        if new_buy and st.session_state["scanned_once"]:
+            st.toast("🟢 নতুন BUY সিগন্যাল: " + ", ".join(sorted(new_buy)), icon="🔔")
+        st.session_state["prev_buy"] = buy_now
+
+        # How old is the newest data? (yfinance can lag)
+        lag_min, candle_lbl = None, ""
+        stamps = [r["_data_ts"] for r in rows if r.get("_data_ts") is not None]
+        if stamps:
+            newest = max(stamps)
+            candle_lbl = newest.strftime("%H:%M")
+            lag_min = (now_ist() - newest).total_seconds() / 60
 
         st.session_state["picks"] = picks
         st.session_state["all_rows"] = rows
@@ -547,9 +629,21 @@ def main():
         st.session_state["n_avoid"] = len([r for r in rows if r["_key"] == "AVOID"])
         st.session_state["last_scan_ts"] = time.time()
         st.session_state["last_scan_label"] = now_ist().strftime("%I:%M:%S %p")
+        st.session_state["last_candle_label"] = candle_lbl
+        st.session_state["data_lag_min"] = lag_min
+        st.session_state["scanned_once"] = True
 
     picks = st.session_state["picks"]
     all_rows = st.session_state["all_rows"]
+
+    # Stale-data warning (only while market is open)
+    lag = st.session_state["data_lag_min"]
+    if all_rows and lag is not None and m_status != "closed" and lag > STALE_MIN:
+        st.markdown(
+            f'<div class="banner warn">⏱ <b>সতর্কতা:</b> ডেটা প্রায় {lag:.0f} মিনিট পুরনো। '
+            f'ডেটা সোর্স দেরিতে আপডেট হচ্ছে, তাই এন্ট্রির আগে চার্টে লাইভ দাম মিলিয়ে নিন।</div>',
+            unsafe_allow_html=True,
+        )
 
     if all_rows:
         st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
@@ -562,15 +656,45 @@ def main():
             st.markdown(f'<div class="summary-card orange"><div class="summary-title">নেগেটিভ ট্রেন্ড (এড়িয়ে চলুন)</div><div class="summary-value">{st.session_state["n_avoid"]}</div><div class="summary-sub">নিচের দিকে ঝুঁকিপূর্ণ</div></div>', unsafe_allow_html=True)
         with s4:
             lbl = st.session_state["last_scan_label"] if st.session_state["last_scan_label"] else "এখনই"
-            st.markdown(f'<div class="summary-card blue"><div class="summary-title">সর্বশেষ স্ক্যান</div><div class="summary-value" style="font-size:1.1rem; margin-top:4px;">{lbl}</div><div class="summary-sub">স্বয়ংক্রিয় আপডেট চালু আছে</div></div>', unsafe_allow_html=True)
+            if st.session_state["auto_refresh"] and HAS_AUTOREFRESH:
+                sub = "স্বয়ংক্রিয় আপডেট চালু"
+            else:
+                sub = "ম্যানুয়াল স্ক্যান"
+            if st.session_state["last_candle_label"]:
+                sub += f" | ডেটা: {st.session_state['last_candle_label']}"
+            st.markdown(f'<div class="summary-card blue"><div class="summary-title">সর্বশেষ স্ক্যান</div><div class="summary-value" style="font-size:1.1rem; margin-top:4px;">{lbl}</div><div class="summary-sub">{sub}</div></div>', unsafe_allow_html=True)
 
         st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
-        st.markdown(f"### 🏆 আজকের সেরা {len(picks)} টি স্টক (ব্রেকআউট ও ট্রেন্ড ফিল্টার অনুযায়ী)", unsafe_allow_html=True)
-        st.markdown("<div class='section-label'>প্রতিটি কার্ডে নিখুঁত এন্ট্রি, স্টপলস এবং টার্গেট দেওয়া আছে:</div>", unsafe_allow_html=True)
+        st.markdown(f"### 🏆 আজকের সেরা {len(picks)} টি স্টক (ব্রেকআউট ও ট্রেন্ড ফিল্টার অনুযায়ী)", unsafe_allow_html=True)
+        st.markdown("<div class='section-label'>প্রতিটি কার্ডে এন্ট্রি, স্টপলস এবং টার্গেট দেওয়া আছে:</div>", unsafe_allow_html=True)
 
-        if not picks:
-            st.info("এই মুহূর্তে কোনো স্টক 'BUY' বা 'TRIGGER' জোনে নেই। বাজার সাইডওয়েজ বা রেজিস্ট্যান্সের নিচে রয়েছে।")
-        else:
+        # Export buttons (TradingView watchlist + CSV)
+        if picks:
+            e1, e2, e3 = st.columns([1.3, 1.3, 3])
+            with e1:
+                st.download_button(
+                    "📥 TradingView Watchlist",
+                    data="\n".join(tv_symbol(p["Stock"]) for p in picks),
+                    file_name="swift_trade_watchlist.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                )
+            with e2:
+                df_exp = pd.DataFrame(all_rows)
+                df_exp = df_exp[[c for c in df_exp.columns if not c.startswith("_")]]
+                st.download_button(
+                    "📥 সব ফলাফল CSV",
+                    data=df_exp.to_csv(index=False).encode("utf-8-sig"),
+                    file_name="swift_trade_scan.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+
+        actionable = [p for p in picks if p["_key"] in ("BUY", "TRIGGER", "NEAR")]
+        if not actionable:
+            st.info("এই মুহূর্তে কোনো স্টক BUY / TRIGGER / NEAR জোনে নেই। নিচের কার্ডগুলো শুধু নজরে রাখার জন্য, এন্ট্রির জন্য নয়।")
+
+        if picks:
             cols = st.columns(2)
             for i, p in enumerate(picks):
                 col = cols[i % 2]
@@ -580,6 +704,8 @@ def main():
                     l1h = "on" if p["_l1h"] else "off"
                     l15 = "on" if p["_l15"] else "off"
                     l5 = "on" if p["_l5"] else "off"
+                    star_html = '<span class="star">★ BUY সিগন্যাল</span>' if p["_key"] == "BUY" else ""
+                    brk_html = f'<div>ব্রেকআউট: <b>{p["Breakout Time"]}</b></div>' if p["Breakout Time"] else ""
 
                     st.markdown(f"""
                     <div class="pick-card">
@@ -587,7 +713,7 @@ def main():
                         <div>
                           <span class="pick-rank">#{i+1}</span>
                           <span class="pick-name">{p['Stock']}</span>
-                          <span class="star">★ সেরা পিক</span>
+                          {star_html}
                           <div class="pick-sector">সেক্টর: {p['Sector']}</div>
                         </div>
                         <div class="pick-ltp">
@@ -615,6 +741,8 @@ def main():
                         <div>দূরত্ব: <b>{p['Dist from Res %']}%</b></div>
                         <div>ভলিউম: <b>{p['Volume x']}x</b></div>
                         <div>RSI(15M): <b>{p['RSI 15M']}</b></div>
+                        <div>SL ঝুঁকি: <b>{p['Risk %']}%</b></div>
+                        {brk_html}
                       </div>
 
                       <div class="advice">💡 <b>পরামর্শ:</b> {p['Note']}</div>
@@ -624,13 +752,6 @@ def main():
         st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
         with st.expander("📋 সমস্ত স্ক্যান করা স্টকের তালিকা ও ডিটেইলস দেখুন"):
             df_all = pd.DataFrame(all_rows)
-            cols_to_show = ["Stock", "Sector", "Status", "LTP", "Change %", "Resistance", "Entry", "Stop Loss", "Target", "Volume x", "RSI 15M", "Note"]
+            cols_to_show = ["Stock", "Sector", "Status", "LTP", "Change %", "Resistance", "Entry", "Stop Loss", "Target", "Risk %", "Volume x", "RSI 15M", "Breakout Time", "Note"]
             if not df_all.empty:
-                st.dataframe(df_all[[c for c in cols_to_show if c in df_all.columns]], use_container_width=True, hide_index=True)
-
-    else:
-        st.info("ওপরের **'🚀 স্ক্যান শুরু করুন'** বাটনে ক্লিক করে আজকের মার্কেট স্ক্যান শুরু করুন।")
-
-if __name__ == "__main__":
-    main()
-    
+                st.datafr
