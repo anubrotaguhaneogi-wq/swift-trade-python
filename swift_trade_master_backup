@@ -397,71 +397,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     atr15 = nz(calculate_atr(c15).iloc[-1], price * 0.003)
 
     ext = (price / resistance - 1) * 100
-    change_pct = (price / prev_close - 1) * 100
 
-    # ---- Status ----
-    note = ""
-    if trend_down:
-        key, note = "AVOID", "১ ঘণ্টার ট্রেন্ড নিচের দিকে। এই স্টকে কিনবেন না।"
-    elif breakout:
-        if ext > MAX_EXT or rsi15 > RSI_MAX:
-            key, note = "LATE", "অনেক উপরে উঠে গেছে। ধাওয়া করবেন না, পুলব্যাকের অপেক্ষা করুন।"
-        elif not fresh:
-            key, note = "LATE", f"ব্রেকআউট {break_time} এ হয়েছে, এখন আর ফ্রেশ নয়। পুলব্যাকের অপেক্ষা করুন।"
-        elif not vol_ok:
-            key, note = "WAIT", "ব্রেকআউট হয়েছে কিন্তু ভলিউম কম। দুর্বল ব্রেকআউট, ঝুঁকি বেশি।"
-        elif not trend_up:
-            key, note = "WAIT", "১ ঘণ্টার ট্রেন্ড এখনো পরিষ্কার নয়। অপেক্ষা করুন।"
-        elif gap:
-            key, note = "TRIGGER", "গ্যাপ-আপে ব্রেকআউট। প্রথম পুলব্যাক ধরে রাখলে তবেই ঢুকুন।"
-        elif conf5:
-            key, note = "BUY", "১H, ১৫M, ৫M তিনটিই মিলেছে। স্টপলস মেনে এন্ট্রি নিতে পারেন।"
-        else:
-            key, note = "TRIGGER", "ভলিউমসহ ব্রেকআউট হয়েছে। ৫ মিনিটের নিশ্চিতকরণের জন্য আরেকটু অপেক্ষা করুন।"
-    elif broke_today:
-        key, note = "WAIT", "রেজিস্ট্যান্সের উপরে উঠে আবার নিচে নেমেছে (ফেক ব্রেকআউট)। এড়িয়ে চলুন।"
-    elif trend_up and ext >= -NEAR_PCT:
-        key, note = "NEAR", "রেজিস্ট্যান্সের খুব কাছে। ভলিউমসহ ১৫ মিনিটে ক্লোজ হলে তবেই ঢুকুন।"
-    else:
-        key, note = "WAIT", "এখনো রেজিস্ট্যান্স থেকে দূরে বা সেটআপ তৈরি হয়নি।"
-
-    # ---- Entry / Stop loss / Target ----
-    entry = price if breakout else resistance * 1.001
-    sl = resistance * (1 - SL_PCT / 100) - ATR_BUF * atr15
-    if sl >= entry:
-        sl = entry * (1 - SL_PCT / 100)
-    target = entry + RR * (entry - sl)
-    risk_pct = (entry - sl) / entry * 100 if entry > 0 else 0.0
-
-    l1h = bool(trend_up)
-    l15 = bool(breakout and vol_ok)
-    l5 = bool(conf5 if breakout else above_ema9)
-
-    # ---- Ranking score (higher = better, inside the same status) ----
-    score = (min(vol_ratio, 4.0) * 2
-             + (1.0 if l5 else 0.0)
-             + (1.0 if 55 <= rsi15 <= 70 else 0.0)
-             + (1.0 if (breakout and fresh) else 0.0)
-             - abs(ext) * 0.5)
-
-    return {
-        "Stock": sym,
-        "Sector": sector,
-        "Status": STATUS[key]["label"],
-        "LTP": round(price, 2),
-        "Change %": round(change_pct, 2),
-        "Resistance": round(resistance, 2),
-        "Dist from Res %": round(ext, 2),
-        "Entry": round(entry, 2),
-        "Stop Loss": round(sl, 2),
-        "Target": round(target, 2),
-        "Risk %": round(risk_pct, 2),
-        "Volume x": round(vol_ratio, 2),
-        "RSI 15M": round(rsi15, 1),
-        "Breakout Time": break_time,
-        "Note": note,
-        "_key": key,
-        "_prio
 
 # ==================== CORE ANALYSIS ====================
 def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
