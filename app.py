@@ -755,3 +755,17 @@ def main():
             cols_to_show = ["Stock", "Sector", "Status", "LTP", "Change %", "Resistance", "Entry", "Stop Loss", "Target", "Risk %", "Volume x", "RSI 15M", "Breakout Time", "Note"]
             if not df_all.empty:
                 st.datafr
+                st.dataframe(df_all[[c for c in cols_to_show if c in df_all.columns]], use_container_width=True, hide_index=True)
+
+        skipped = st.session_state["skipped"]
+        if skipped:
+            with st.expander(f"⚠ {len(skipped)} টি স্টকের ডেটা পাওয়া যায়নি / স্কিপ হয়েছে"):
+                for s_name, why in skipped:
+                    st.write(f"**{s_name}** — {why}")
+
+    else:
+        st.info("ওপরের **'🚀 স্ক্যান শুরু করুন'** বাটনে ক্লিক করে আজকের মার্কেট স্ক্যান শুরু করুন।")
+
+if __name__ == "__main__":
+    main()
+  
