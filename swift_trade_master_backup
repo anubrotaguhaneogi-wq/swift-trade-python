@@ -191,7 +191,7 @@ def completed(df, minutes):
     """Keep only fully-closed candles (the running candle is dropped)."""
     if df is None or df.empty:
         return df
-    cutoff = now_ist() + pd.Timedelta(seconds=20)
+    cutoff = now_ist()
     return df[(df.index + pd.Timedelta(minutes=minutes)) <= cutoff]
 
 def market_state():
