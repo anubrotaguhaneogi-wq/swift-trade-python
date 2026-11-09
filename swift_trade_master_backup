@@ -334,6 +334,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     if c15 is None or len(c15) < 40:
         return None, "১৫ মিনিটের ডেটা কম"
     c15 = c15.copy()
+    data_ts = c15.index[-1]
     c15["_date"] = c15.index.date
     c15["_tod"] = c15.index.time
     session_date = c15["_date"].iloc[-1]
