@@ -343,19 +343,15 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
         return None, "দৈনিক ডেটা কম"
     resistance = float(comp["High"].tail(RES_LOOKBACK).max())
     prev_close = float(comp["Close"].iloc[-1])
-    if resistance <= 0 or prev_close <= 0:
-        return None, "ডেটা ত্রুটি"
-
-    # ---- Live price + 5M data ----
-    f5 = completed(to_ist_index(d_5), 5)
-    if f5 is None or f5.empty:
-        return None, "সম্পূর্ণ ৫ মিনিটের ডেটা নেই"
-    price = nz(f5["Close"].iloc[-1], 0.0)
-    if price <= 0:
-        price = nz(c15["Close"].iloc[-1], 0.0)
-    if price <= 0:
-        return None, "দাম পাওয়া যায়নি"
-    data_ts = f5.index[-1]
+                d = d[
+                    (d["Open"] > 0) &
+                    (d["High"] > 0) &
+                    (d["Low"] > 0) &
+                    (d["Close"] > 0) &
+                    (d["High"] >= d["Low"]) &
+                    (d["High"] >= d[["Open", "Close"]].max(axis=1)) &
+                    (d["Low"] <= d[["Open", "Close"]].min(axis=1))
+                ]
 
     # ---- 1H trend (completed 1H candles only, so the signal does not flicker) ----
     h = completed(to_ist_index(d_1h), 60)["Close"].astype(float)
