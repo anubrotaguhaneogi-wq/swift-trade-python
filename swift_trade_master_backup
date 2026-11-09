@@ -340,6 +340,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     session_date = c15["_date"].iloc[-1]
     today = c15[c15["_date"] == session_date]
     if today.empty:
+    price = float(today["Close"].iloc[-1])
         return None, "আজকের ১৫ মিনিটের ডেটা নেই"
 
     # ---- Daily resistance (completed days before the session) ----
