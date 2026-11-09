@@ -452,9 +452,9 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
              + (1.0 if l5 else 0.0)
              + (1.0 if 55 <= rsi15 <= 70 else 0.0)
              + (1.0 if (breakout and fresh) else 0.0)
+             - abs(ext) * 0.5)
     if market_state()[0] != "closed" and (now_ist() - data_ts).total_seconds() / 60 > STALE_MIN:
         return None, "লাইভ ডেটা ১০ মিনিটের বেশি পুরোনো"
-             - abs(ext) * 0.5)
 
     return {
         "Stock": sym,
