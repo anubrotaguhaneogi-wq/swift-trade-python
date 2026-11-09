@@ -361,7 +361,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     ema50 = float(h.ewm(span=50, adjust=False).mean().iloc[-1])
 
     # ---- 5M confirmation ----
-    cc5 = completed(f5, 5)
+    cc5 = completed(to_ist_index(d_5), 5)
     above_ema9 = False
     conf5 = False
     if cc5 is not None and len(cc5) >= 10:
