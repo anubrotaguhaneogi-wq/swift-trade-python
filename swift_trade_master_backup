@@ -348,15 +348,10 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
         return None, "দৈনিক ডেটা কম"
     resistance = float(comp["High"].tail(RES_LOOKBACK).max())
     prev_close = float(comp["Close"].iloc[-1])
-                d = d[
-                    (d["Open"] > 0) &
-                    (d["High"] > 0) &
-                    (d["Low"] > 0) &
-                    (d["Close"] > 0) &
-                    (d["High"] >= d["Low"]) &
-                    (d["High"] >= d[["Open", "Close"]].max(axis=1)) &
-                    (d["Low"] <= d[["Open", "Close"]].min(axis=1))
-                ]
+    resistance = float(comp["High"].tail(RES_LOOKBACK).max())
+    prev_close = float(comp["Close"].iloc[-1])
+
+    # ---- 1H trend (completed 1H candles only, so the signal does not flicker) ----
 
     # ---- 1H trend (completed 1H candles only, so the signal does not flicker) ----
     h = completed(to_ist_index(d_1h), 60)["Close"].astype(float)
