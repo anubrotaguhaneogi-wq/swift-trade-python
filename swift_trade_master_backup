@@ -338,7 +338,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
         return None, "ডেটা ত্রুটি"
 
     # ---- Live price + 5M data ----
-    f5 = to_ist_index(d_5)
+    f5 = completed(to_ist_index(d_5), 5)
     price = nz(f5["Close"].iloc[-1], 0.0)
     if price <= 0:
         price = nz(c15["Close"].iloc[-1], 0.0)
