@@ -312,7 +312,7 @@ def day_volume_ratio(c15, session_date, last_tod):
 # ==================== CORE ANALYSIS ====================
 def analyze(sym, sector, d_daily, d_1h, d_15, d_5):
     """Returns (result_dict, None) or (None, reason_for_skipping)."""
-    if d_daily is None or d_1h is None or d_15 is None or d_5 is None:
+    if any(df is None or df.empty for df in (d_daily, d_1h, d_15, d_5)):
         return None, "ডেটা পাওয়া যায়নি (টিকার বদলে গেছে কিনা দেখুন)"
 
     # ---- 15M candles (completed only) ----
