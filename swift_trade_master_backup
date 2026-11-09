@@ -240,8 +240,9 @@ def _download(tickers, period, interval):
     for t in tickers:
         try:
             d = raw[t] if isinstance(raw.columns, pd.MultiIndex) else raw
-            if not all(c in d.columns for c in cols):
-                continue
+                            if not all(c in d.columns for c in cols):
+                    continue
+
                 d = d[cols].apply(pd.to_numeric, errors="coerce").dropna()
                 d = d[
                     (d["Open"] > 0) &
@@ -252,7 +253,9 @@ def _download(tickers, period, interval):
                     (d["High"] >= d[["Open", "Close"]].max(axis=1)) &
                     (d["Low"] <= d[["Open", "Close"]].min(axis=1))
                 ]
+
                 d = d[~d.index.duplicated(keep="last")].sort_index()
+
                 if len(d):
                     out[t] = d
         except Exception:
