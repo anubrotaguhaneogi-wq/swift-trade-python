@@ -239,25 +239,24 @@ def _download(tickers, period, interval):
         return out
     for t in tickers:
         try:
-            d = raw[t] if isinstance(raw.columns, pd.MultiIndex) else raw
-                            if not all(c in d.columns for c in cols):
-                    continue
+                        d = raw[t] if isinstance(raw.columns, pd.MultiIndex) else raw
+            if not all(c in d.columns for c in cols):
+                continue
 
-                d = d[cols].apply(pd.to_numeric, errors="coerce").dropna()
-                d = d[
-                    (d["Open"] > 0) &
-                    (d["High"] > 0) &
-                    (d["Low"] > 0) &
-                    (d["Close"] > 0) &
-                    (d["High"] >= d["Low"]) &
-                    (d["High"] >= d[["Open", "Close"]].max(axis=1)) &
-                    (d["Low"] <= d[["Open", "Close"]].min(axis=1))
-                ]
+            d = d[cols].apply(pd.to_numeric, errors="coerce").dropna()
+            d = d[
+                (d["Open"] > 0) &
+                (d["High"] > 0) &
+                (d["Low"] > 0) &
+                (d["Close"] > 0) &
+                (d["High"] >= d["Low"]) &
+                (d["High"] >= d[["Open", "Close"]].max(axis=1)) &
+                (d["Low"] <= d[["Open", "Close"]].min(axis=1))
+            ]
+            d = d[~d.index.duplicated(keep="last")].sort_index()
 
-                d = d[~d.index.duplicated(keep="last")].sort_index()
-
-                if len(d):
-                    out[t] = d
+            if len(d):
+                out[t] = d
         except Exception:
             continue
     return out
