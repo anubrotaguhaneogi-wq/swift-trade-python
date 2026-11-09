@@ -239,7 +239,9 @@ def _download(tickers, period, interval):
         return out
     for t in tickers:
         try:
-                        d = raw[t] if isinstance(raw.columns, pd.MultiIndex) else raw
+                        
+            d = raw[t] if isinstance(raw.columns, pd.MultiIndex) else raw
+
             if not all(c in d.columns for c in cols):
                 continue
 
