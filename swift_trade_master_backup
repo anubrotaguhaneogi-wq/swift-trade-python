@@ -31,7 +31,7 @@ import yfinance as yf
 try:
     from streamlit_autorefresh import st_autorefresh
     HAS_AUTOREFRESH = True
-except Exception:
+except ImportError:
     HAS_AUTOREFRESH = False
 
 # ==================== SETTINGS (change here if needed) ====================
@@ -247,7 +247,7 @@ OHLCV = ["Open", "High", "Low", "Close", "Volume"]
 INTRADAY_PERIOD = {"1m": "2d", "5m": "5d", "15m": "1mo"}
 
 
-def yahoo_ticker(sym):
+if mins >= 15 * 60 + 30:
     return sym + ".NS"
 
 
