@@ -591,7 +591,9 @@ if d_5 is not None and not d_5.empty:
     fresh = bars_since <= FRESH_BARS
 
     drv = day_volume_ratio(c15, session_date, today.index[-1].time())
-    vol_ratio = nz(max(nz(rvol_break, 0.0), nz(drv, 0.0)) if breakout else nz(drv, 0.0), 0.0)
+    
+vol_ratio = nz(rvol_break if breakout else drv, 0.0)
+
     vol_ok = vol_ratio >= VOL_MULT
 
     rsi15 = nz(calculate_rsi(c15["Close"]).iloc[-1], 50.0)
