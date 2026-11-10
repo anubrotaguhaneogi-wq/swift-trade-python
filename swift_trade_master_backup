@@ -250,17 +250,18 @@ INTRADAY_PERIOD = {"1m": "2d", "5m": "5d", "15m": "1mo"}
 if mins >= 15 * 60 + 30:
     return sym + ".NS"
 
-
 def _clean_ohlcv(d):
-    """Repair instead of deleting: only rows with missing / non-positive prices are dropped."""
+    """Clean OHLCV data by removing invalid prices and negative volume rows."""
     d = d[OHLCV].apply(pd.to_numeric, errors="coerce")
     d = d.dropna(subset=["Open", "High", "Low", "Close"]).copy()
     d["Volume"] = d["Volume"].fillna(0)
+    d = d[d["Volume"] >= 0].copy()
     d = d[(d[["Open", "High", "Low", "Close"]] > 0).all(axis=1)].copy()
     px = d[["Open", "High", "Low", "Close"]]
     d["High"] = px.max(axis=1)
     d["Low"] = px.min(axis=1)
     d = d[~d.index.duplicated(keep="last")].sort_index()
+    return d
     return d
 
 
@@ -398,12 +399,11 @@ def get_index():
 
 
 def clear_fast_cache():
+    _cached_daily.clear()
     _cached_hourly.clear()
     _cached_intraday.clear()
     _cached_index.clear()
 
-
-# ==================== INDICATORS ====================
 def calculate_rsi(series, period=14):
     delta = series.diff()
     gain = delta.clip(lower=0)
@@ -413,6 +413,9 @@ def calculate_rsi(series, period=14):
     rs = avg_gain / avg_loss.replace(0, np.nan)
     rsi = 100 - (100 / (1 + rs))
     rsi = rsi.where(avg_loss.ne(0), 100)
+    rsi = rsi.where(avg_gain.ne(0), 0)
+    rsi = rsi.mask(avg_gain.eq(0) & avg_loss.eq(0), 50)
+    return rsi.fillna(50)
     rsi = rsi.where(avg_gain.ne(0), 0)
     return rsi.fillna(50)
 
