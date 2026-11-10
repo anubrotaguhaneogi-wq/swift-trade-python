@@ -827,7 +827,9 @@ def main():
 
         # Newest price time + how many stocks have an old price
         stamps = [r["_price_ts"] for r in rows if r.get("_price_ts") is not None]
-        price_lbl = max(stamps).strftime("%H:%M") if stamps else ""
+        
+price_lbl = max(stamps).strftime("%H:%M") if stamps else "N/A"
+
 
         st.session_state["picks"] = picks
         st.session_state["all_rows"] = rows
