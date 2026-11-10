@@ -511,7 +511,7 @@ def run_scan(active_sectors, force=False):
     if not h1 or not m15 or not m5:
         fetch_hourly.clear()
         fetch_fast.clear()
-        h1 = fetch_hourly(tickers, "3mo", "1h")
+        h1 = fetch_hourly(tickers, "6mo", "1h")
         m15 = fetch_fast(tickers, "1mo", "15m")
         m5 = fetch_fast(tickers, "5d", "5m")
     bar.progress(90, text="বিশ্লেষণ চলছে...")
