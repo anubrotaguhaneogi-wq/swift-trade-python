@@ -460,21 +460,36 @@ def day_volume_ratio(c15, session_date, last_tod):
     return cum_today / avg if avg > 0 else np.nan
 
 
+
 def live_price(d_1m, d_5m, d_15, session_date):
-    """Newest price INCLUDING the running candle.
-    Tries 1M data first, then 5M, then 15M.
-    Returns (price, bar_start_ts, bar_minutes) or (None, None, None)."""
+    """Select the newest valid price across 1M, 5M and 15M data."""
+    candidates = []
+
     for df, mins in ((d_1m, 1), (d_5m, 5), (d_15, 15)):
         if df is None or df.empty:
             continue
-        x = to_ist_index(df)
-        ts = x.index[-1]
-        if ts.date() != session_date:
+
+        x = to_ist_index(df).sort_index()
+        x = x[x.index.date == session_date]
+
+        if x.empty:
             continue
-        p = nz(x["Close"].iloc[-1], 0.0)
-        if p > 0:
-            return p, ts, mins
-    return None, None, None
+
+        ts = x.index[-1]
+        price = nz(x["Close"].iloc[-1], 0.0)
+
+        if price > 0:
+            candidates.append((ts, price, mins))
+
+    if not candidates:
+        return None, None, None
+
+    candidates.sort(key=lambda item: (item[0], -item[2]), reverse=True)
+
+    ts, price, mins = candidates[0]
+
+    return price, ts, mins
+
 
 
 # ===== END OF PART 1 — paste PART 2 right below this line =====
