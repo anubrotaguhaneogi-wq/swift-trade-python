@@ -247,8 +247,10 @@ OHLCV = ["Open", "High", "Low", "Close", "Volume"]
 INTRADAY_PERIOD = {"1m": "2d", "5m": "5d", "15m": "1mo"}
 
 
-if mins >= 15 * 60 + 30:
+
+def yahoo_ticker(sym):
     return sym + ".NS"
+
 
 def _clean_ohlcv(d):
     """Clean OHLCV data by removing invalid prices and negative volume rows."""
