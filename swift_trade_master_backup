@@ -503,7 +503,7 @@ def run_scan(active_sectors, force=False):
         fetch_daily.clear()
         daily = fetch_daily(tickers, "6mo", "1d")
     bar.progress(25, text="১ ঘণ্টার ডেটা আনা হচ্ছে...")
-    h1 = fetch_hourly(tickers, "3mo", "1h")
+    h1 = fetch_hourly(tickers, "6mo", "1h")
     bar.progress(50, text="১৫ মিনিটের ডেটা আনা হচ্ছে...")
     m15 = fetch_fast(tickers, "1mo", "15m")
     bar.progress(75, text="৫ মিনিটের ডেটা আনা হচ্ছে...")
