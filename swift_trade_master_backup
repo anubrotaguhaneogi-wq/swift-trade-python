@@ -42,7 +42,7 @@ TOP_N = 6              # how many stocks to show
 RES_LOOKBACK = 20      # resistance = highest High of last 20 completed daily candles
 VOL_MULT = 1.5         # breakout volume must be >= 1.5x normal (same time of day)
 MAX_EXT = 2.0          # more than 2% above resistance = "late / overbought"
-RSI_MAX = 75           # 15M RSI above this = overbought
+RSI_MAX = 70           # 15M RSI above this = overbought
 NEAR_PCT = 1.0         # within 1% below resistance = "near breakout"
 GAP_PCT = 0.3          # day opened more than 0.3% above resistance = gap-up
 SL_PCT = 1.5           # stop loss = 1.5% below resistance ...
