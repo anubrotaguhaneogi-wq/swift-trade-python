@@ -916,3 +916,4 @@ def main():
                       <div class="levels">
                         <div class="level"><div class="k">এন্ট্রি (Entry)</div><div class="v">₹{p['Entry']:,.2f}</div></div>
                         <div class="level sl"><div class="k">স্টপলস (SL)</div><div class="v">₹{p['Stop Loss']:,.2f}</div><
+<div class="level sl"><div class="k">স্টপলস (SL)</div><div class="v">₹{p['Stop Loss']:,.2f}</div><
