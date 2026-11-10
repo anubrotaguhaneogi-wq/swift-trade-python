@@ -2,7 +2,7 @@
 Swift Trade v3 | Multi-Timeframe Breakout Scanner (NSE)
 
 Logic in one line:
-  1H = trend direction | 15M = breakout + volume (main setup) | 5M = confirmation
+  4H = major trend | 1H = trend confirmation | 15M = breakout + volume | 5M = entry confirmation
 Output: best 6 stocks across all sectors, each with Entry / Stop Loss / Target.
 
 Requirements (requirements.txt):
