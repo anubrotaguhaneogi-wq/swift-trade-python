@@ -194,6 +194,51 @@ def completed(df, minutes):
     cutoff = now_ist()
     return df[(df.index + pd.Timedelta(minutes=minutes)) <= cutoff]
 
+def build_4h_from_1h(df_1h):
+    """Build completed NSE 4H candles from completed 1H candles."""
+    if df_1h is None or df_1h.empty:
+        return pd.DataFrame()
+
+    h1 = completed(to_ist_index(df_1h), 60)
+    if h1 is None or h1.empty:
+        return pd.DataFrame()
+
+    rows = []
+
+    for session_date, day in h1.groupby(h1.index.date):
+        day = day.sort_index()
+
+        start = (
+            pd.Timestamp(session_date)
+            .tz_localize(IST)
+            + pd.Timedelta(hours=9, minutes=15)
+        )
+
+        expected = pd.date_range(
+            start=start,
+            periods=4,
+            freq="1h"
+        )
+
+        block = day.reindex(expected)
+
+        if block[["Open", "High", "Low", "Close", "Volume"]].isna().any().any():
+            continue
+
+        rows.append({
+            "Timestamp": start,
+            "Open": float(block["Open"].iloc[0]),
+            "High": float(block["High"].max()),
+            "Low": float(block["Low"].min()),
+            "Close": float(block["Close"].iloc[-1]),
+            "Volume": float(block["Volume"].sum()),
+        })
+
+    if not rows:
+        return pd.DataFrame()
+
+    return pd.DataFrame(rows).set_index("Timestamp").sort_index()
+
 def market_state():
     t = now_ist()
     mins = t.hour * 60 + t.minute
