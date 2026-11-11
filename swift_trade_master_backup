@@ -418,8 +418,7 @@ def calculate_rsi(series, period=14):
     rsi = rsi.where(avg_gain.ne(0), 0)
     rsi = rsi.mask(avg_gain.eq(0) & avg_loss.eq(0), 50)
     return rsi.fillna(50)
-    rsi = rsi.where(avg_gain.ne(0), 0)
-    return rsi.fillna(50)
+    
 
 
 def calculate_atr(df, period=14):
