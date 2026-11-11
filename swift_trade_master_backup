@@ -421,14 +421,43 @@ def calculate_rsi(series, period=14):
     
 
 
+
 def calculate_atr(df, period=14):
+    if period <= 0:
+        raise ValueError("ATR period must be greater than zero")
+
     prev_close = df["Close"].shift(1)
+
     tr = pd.concat([
         df["High"] - df["Low"],
         (df["High"] - prev_close).abs(),
-        (df["Low"] - prev_close).abs(),
+        (df["Low"] - prev_close).abs()
     ], axis=1).max(axis=1)
-    return tr.ewm(alpha=1 / period, adjust=False, min_periods=period).mean()
+
+    atr = pd.Series(float("nan"), index=df.index, dtype="float64")
+
+    if len(tr) < period:
+        return atr
+
+    initial_atr = tr.iloc[:period].mean()
+
+    if pd.isna(initial_atr):
+        return atr
+
+    atr.iloc[period - 1] = initial_atr
+
+    for i in range(period, len(tr)):
+        current_tr = tr.iloc[i]
+
+        if pd.isna(current_tr):
+            atr.iloc[i] = atr.iloc[i - 1]
+        else:
+            atr.iloc[i] = (
+                atr.iloc[i - 1] * (period - 1) + current_tr
+            ) / period
+
+    return atr
+
 
 
 def nz(x, default=0.0):
