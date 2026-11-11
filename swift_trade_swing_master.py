@@ -359,16 +359,15 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
     )
 
     # Risk and reward levels
-    
     risk_per_share = (
-        max(1.5 * atr, price * 0.06)
-        if np.isfinite(atr)
-        else price * 0.08
-    )
+    max(1.5 * atr, price * 0.06)
+    if np.isfinite(atr)
+    else price * 0.08
+)
 
-    stop = max(TICK_SIZE, price - risk_per_share)
-    target1 = price + (2.0 * risk_per_share)
-    target2 = price + (3.0 * risk_per_share)
+stop = max(TICK_SIZE, price - risk_per_share)
+target1 = price + (2.0 * risk_per_share)
+target2 = price + (3.0 * risk_per_share))
 
     entry_low = (
         price - (0.25 * atr)
@@ -381,8 +380,19 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
         if np.isfinite(atr)
         else price * 1.01
     )
+            entry_price = (entry_low + entry_high) / 2
 
-    # Signal classification
+            risk_per_share = (
+                    max(1.5 * atr, entry_price * 0.04)
+                    if np.isfinite(atr) and atr > 0
+                    else entry_price * 0.06
+        )
+
+            risk_per_share = min(risk_per_share, entry_price * 0.10)
+
+            stop = max(TICK_SIZE, entry_price - risk_per_share)
+            target1 = entry_price + (2.0 * risk_per_share)
+            target2 = entry_price + (3.0 * risk_per_share)
     if (
         score >= 85
         and trend
