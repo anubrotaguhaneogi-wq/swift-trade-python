@@ -367,7 +367,7 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
 
 stop = max(TICK_SIZE, price - risk_per_share)
 target1 = price + (2.0 * risk_per_share)
-target2 = price + (3.0 * risk_per_share))
+target2 = price + (3.0 * risk_per_share)
 
     entry_low = (
         price - (0.25 * atr)
