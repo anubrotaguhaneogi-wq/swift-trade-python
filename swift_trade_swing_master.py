@@ -379,6 +379,7 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
         and long_trend
         and momentum
         and volume_ok
+        and (breakout or pullback_reclaim)
         and not_extended
     ):
         status = "SWING CANDIDATE"
