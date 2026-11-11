@@ -358,41 +358,32 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
         round(100 * sum(checks) / len(checks))
     )
 
-    # Risk and reward levels
-    risk_per_share = (
-    max(1.5 * atr, price * 0.06)
-    if np.isfinite(atr)
-    else price * 0.08
-)
 
-stop = max(TICK_SIZE, price - risk_per_share)
-target1 = price + (2.0 * risk_per_share)
-target2 = price + (3.0 * risk_per_share)
 
     entry_low = (
-        price - (0.25 * atr)
-        if np.isfinite(atr)
+        max(TICK_SIZE, price - (0.25 * atr))
+        if np.isfinite(atr) and atr > 0
         else price * 0.99
     )
 
     entry_high = (
         price + (0.25 * atr)
-        if np.isfinite(atr)
+        if np.isfinite(atr) and atr > 0
         else price * 1.01
     )
-            entry_price = (entry_low + entry_high) / 2
 
-            risk_per_share = (
-                    max(1.5 * atr, entry_price * 0.04)
-                    if np.isfinite(atr) and atr > 0
-                    else entry_price * 0.06
-        )
+    entry_price = (entry_low + entry_high) / 2
 
-            risk_per_share = min(risk_per_share, entry_price * 0.10)
+    # ATR-based risk with minimum and maximum limits.
+    if np.isfinite(atr) and atr > 0:
+        risk_per_share = max(1.5 * atr, entry_price * 0.04)
+        risk_per_share = min(risk_per_share, entry_price * 0.10)
+    else:
+        risk_per_share = entry_price * 0.06
 
-            stop = max(TICK_SIZE, entry_price - risk_per_share)
-            target1 = entry_price + (2.0 * risk_per_share)
-            target2 = entry_price + (3.0 * risk_per_share)
+    stop = max(TICK_SIZE, entry_price - risk_per_share)
+    target1 = entry_price + (2.0 * risk_per_share)
+    target2 = entry_price + (3.0 * risk_per_share)
     if (
         score >= 85
         and trend
