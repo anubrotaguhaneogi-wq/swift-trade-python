@@ -185,7 +185,16 @@ def normalize_upload(
 
     counts = df.groupby("symbol")["date"].nunique()
     short = counts[counts < 60]
+    today = pd.Timestamp.now(tz="Asia/Kolkata").normalize().tz_localize(None)
+    latest_dates = df.groupby("symbol")["date"].max()
+    stale_symbols = latest_dates[latest_dates < today - pd.Timedelta(days=7)]
 
+    if not stale_symbols.empty:
+        raise ValueError(
+            "Stale market data detected for: "
+            + ", ".join(stale_symbols.index.astype(str))
+    )
+    
     if not short.empty:
         warnings.append(
             "Some symbols have fewer than 60 daily candles. "
