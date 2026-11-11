@@ -583,16 +583,16 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5, d_1m):
     above_ema9 = False
     conf5 = False
     
-if d_5 is not None and not d_5.empty:
-    cc5 = completed(to_ist_index(d_5), 5)
-    if cc5 is not None:
-        cc5 = cc5[cc5.index.date == session_date]
+    if d_5 is not None and not d_5.empty:
+                     cc5 = completed(to_ist_index(d_5), 5)
+                     if cc5 is not None:
+                                 cc5 = cc5[cc5.index.date == session_date]
 
-        if len(cc5) >= 10:
-            ema9_5 = cc5["Close"].ewm(span=9, adjust=False).mean()
-            above_ema9 = float(cc5["Close"].iloc[-1]) > float(ema9_5.iloc[-1])
-            last3 = cc5.tail(3)
-            conf5 = bool((last3["Close"] > resistance).all() and above_ema9)
+                                 if len(cc5) >= 10:
+                                           ema9_5 = cc5["Close"].ewm(span=9, adjust=False).mean()
+                                           above_ema9 = float(cc5["Close"].iloc[-1]) > float(ema9_5.iloc[-1])
+                                           last3 = cc5.tail(3)
+                                           conf5 = bool((last3["Close"] > resistance).all() and above_ema9)
 
 
     # ---- 15M breakout detection ----
