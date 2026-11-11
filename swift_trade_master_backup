@@ -620,7 +620,7 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5, d_1m):
 
     drv = day_volume_ratio(c15, session_date, today.index[-1].time())
     
-vol_ratio = nz(rvol_break if breakout else drv, 0.0)
+    vol_ratio = nz(rvol_break if breakout else drv, 0.0)
 
     vol_ok = vol_ratio >= VOL_MULT
 
@@ -856,7 +856,7 @@ def main():
         # Newest price time + how many stocks have an old price
         stamps = [r["_price_ts"] for r in rows if r.get("_price_ts") is not None]
         
-price_lbl = max(stamps).strftime("%H:%M") if stamps else "N/A"
+        price_lbl = max(stamps).strftime("%H:%M") if stamps else "N/A"
 
 
         st.session_state["picks"] = picks
