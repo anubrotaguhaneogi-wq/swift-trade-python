@@ -359,6 +359,7 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
     )
 
     # Risk and reward levels
+    
     risk_per_share = (
         max(1.5 * atr, price * 0.06)
         if np.isfinite(atr)
