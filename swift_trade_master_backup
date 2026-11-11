@@ -264,7 +264,7 @@ def _clean_ohlcv(d):
     d["Low"] = px.min(axis=1)
     d = d[~d.index.duplicated(keep="last")].sort_index()
     return d
-    return d
+  
 
 
 def _yahoo_download(symbols, period, interval):
