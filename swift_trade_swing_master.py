@@ -87,8 +87,10 @@ def calculate_rsi(
     rs = gain / loss.replace(0, np.nan)
     rsi = 100 - (100 / (1 + rs))
 
-    return rsi.fillna(50.0)
     rsi = rsi.mask((loss == 0) & (gain > 0), 100.0)
+    rsi = rsi.mask((loss == 0) & (gain == 0), 50.0)
+
+    return rsi.fillna(50.0)
 
 def calculate_atr(
     df: pd.DataFrame,
