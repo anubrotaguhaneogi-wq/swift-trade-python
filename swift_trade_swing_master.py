@@ -145,7 +145,17 @@ def normalize_upload(
         df["date"],
         errors="coerce"
     )
+    future_rows = (
+        df["date"].dt.normalize()
+        > pd.Timestamp.now(
+            tz="Asia/Kolkata"
+        ).normalize().tz_localize(None)
+    )
 
+    if future_rows.any():
+        raise ValueError(
+            "Future-dated candles detected. Please check CSV dates."
+        )
     for col in ["open", "high", "low", "close", "volume"]:
         df[col] = pd.to_numeric(
             df[col],
