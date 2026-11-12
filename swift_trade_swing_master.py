@@ -301,7 +301,10 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
         )
         .dropna(subset=["close"])
     )
+    latest_daily_date = pd.Timestamp(d["date"].iloc[-1])
 
+    if not weekly.empty and weekly.index[-1] > latest_daily_date:
+        weekly = weekly.iloc[:-1]
     weekly_up = False
 
     if len(weekly) >= 12:
