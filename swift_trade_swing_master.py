@@ -183,7 +183,7 @@ def normalize_upload(
 
     warnings = []
 
-    counts = df.groupby("symbol")["date"].nunique()
+    short = counts[counts < 250]
     short = counts[counts < 60]
     today = pd.Timestamp.now(tz="Asia/Kolkata").normalize().tz_localize(None)
     latest_dates = df.groupby("symbol")["date"].max()
@@ -197,7 +197,7 @@ def normalize_upload(
     
     if not short.empty:
         warnings.append(
-            "Some symbols have fewer than 60 daily candles. "
+            "Some symbols have fewer than 250 daily candles. "
             "Longer-term trend checks may be unavailable."
         )
 
@@ -213,7 +213,7 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
         .copy()
     )
 
-    if len(d) < 60:
+    if len(d) < 250:
         return {
             "symbol": str(d["symbol"].iloc[-1]),
             "status": "INSUFFICIENT DATA",
