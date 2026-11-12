@@ -391,6 +391,7 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
         score >= 85
         and trend
         and long_trend
+        and weekly_up
         and momentum
         and volume_ok
         and (breakout or pullback_reclaim)
