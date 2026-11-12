@@ -220,7 +220,7 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
             "score": 0,
             "reason": (
                 f"Only {len(d)} daily candles; "
-                "need at least 60."
+                "need at least 250."
             )
         }
 
