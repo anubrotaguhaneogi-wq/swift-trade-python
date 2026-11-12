@@ -88,7 +88,7 @@ def calculate_rsi(
     rsi = 100 - (100 / (1 + rs))
 
     return rsi.fillna(50.0)
-
+    rsi = rsi.mask((loss == 0) & (gain > 0), 100.0)
 
 def calculate_atr(
     df: pd.DataFrame,
@@ -399,7 +399,12 @@ def analyze_symbol(df: pd.DataFrame) -> dict:
     ):
         status = "SWING CANDIDATE"
 
-    elif score >= 70:
+    elif (
+        score >= 70
+        and trend
+        and long_trend
+        and weekly_up
+    ):
         status = "WATCHLIST"
 
     else:
