@@ -539,7 +539,7 @@ with st.expander("CSV format required", expanded=True):
 
     st.write(
         "Upload one CSV containing one row per symbol per trading day. "
-        "For reliable analysis, aim for at least 200 daily candles per symbol."
+        "For reliable analysis, provide at least 250 daily candles per symbol."
     )
 
 
