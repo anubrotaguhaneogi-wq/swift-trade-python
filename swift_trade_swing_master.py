@@ -137,7 +137,8 @@ def normalize_upload(
     df = df[REQUIRED_COLUMNS].copy()
 
     df["symbol"] = (
-        df["symbol"].astype(str).str.strip().str.upper()
+                df["symbol"].astype("string").str.strip().str.upper()
+
     )
 
     df["date"] = pd.to_datetime(
