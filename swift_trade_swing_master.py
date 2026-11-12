@@ -241,7 +241,7 @@ def analyze_symbol(group: pd.DataFrame) -> Dict[str, Any]:
 
     close = d["close"]
     d["ema20"] = close.ewm(span=20, adjust=False).mean()
-        d["ema50"] = close.ewm(span=50, adjust=False).mean()
+    d["ema50"] = close.ewm(span=50, adjust=False).mean()
     d["ema200"] = close.ewm(span=200, adjust=False).mean()
     d["rsi14"] = calculate_rsi(close, RSI_PERIOD)
     d["atr14"] = calculate_atr(d, ATR_PERIOD)
