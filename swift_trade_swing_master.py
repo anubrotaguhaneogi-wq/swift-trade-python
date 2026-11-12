@@ -185,8 +185,8 @@ def normalize_upload(
 
     warnings = []
 
+    counts = df.groupby("symbol").size()
     short = counts[counts < 250]
-    short = counts[counts < 60]
     today = pd.Timestamp.now(tz="Asia/Kolkata").normalize().tz_localize(None)
     latest_dates = df.groupby("symbol")["date"].max()
     stale_symbols = latest_dates[latest_dates < today - pd.Timedelta(days=7)]
