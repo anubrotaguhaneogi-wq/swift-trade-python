@@ -974,15 +974,13 @@ def main():
                         <span class="lamp {l15}">15M ব্রেকআউট+ভলিউম {('✅' if p["_l15"] else '❌')}</span>
                         <span class="lamp {l5}">5M কনফার্মেশন {('✅' if p["_l5"] else '❌')}</span>
                       </div>
-
                       <div class="levels">
-                   
                         <div class="level"><div class="k">এন্ট্রি (Entry)</div><div class="v">₹{p['Entry']:,.2f}</div></div>
-
                         <div class="level sl"><div class="k">স্টপলস (SL)</div><div class="v">₹{p['Stop Loss']:,.2f}</div></div>
                         <div class="level tg"><div class="k">টার্গেট (Target)</div><div class="v">₹{p['Target']:,.2f}</div></div>
                       </div>
                     </div>
+
                     """, unsafe_allow_html=True)
 
 
