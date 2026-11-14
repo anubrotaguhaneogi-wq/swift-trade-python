@@ -655,6 +655,11 @@ def analyze(sym, sector, d_daily, d_1h, d_15, d_5, d_1m):
     else:
         key, note = "WAIT", "এখনো রেজিস্ট্যান্স থেকে দূরে বা সেটআপ তৈরি হয়নি।"
 
+    # ---- Market closed safety ----
+    if market_state()[0] == "closed":
+        key = "WAIT"
+        note = "বাজার বন্ধ। পরবর্তী ট্রেডিং সেশনে নতুন স্ক্যান করুন।"
+
     # Never give an entry signal on an old price
     if stale and key in ("BUY", "TRIGGER", "NEAR"):
         key = "WAIT"
