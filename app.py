@@ -806,7 +806,13 @@ def main():
                 """, unsafe_allow_html=True)
 
     st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
-
+    # Sector filter
+    all_secs = list(SECTORS.keys())
+    selected_sectors = all_secs
+    with st.expander("⚙ সেক্টর ও সেটিংস ফিল্টার (ক্লিক করে খুলুন)", expanded=False):
+        chosen = st.multiselect("সেক্টর নির্বাচন করুন:", all_secs, default=all_secs)
+        if chosen:
+            selected_sectors = chosen
 
 
     m_status, m_msg = market_state()
