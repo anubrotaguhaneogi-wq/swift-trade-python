@@ -299,7 +299,7 @@ def source_daily(symbols):
 
 def source_hourly(symbols):
     if DATA_SOURCE == "yahoo":
-        return _yahoo_download(symbols, "3mo", "1h")
+      return _yahoo_download(symbols, "1mo", "1h")
     raise NotImplementedError("Broker API hourly data is not connected yet")
 
 
