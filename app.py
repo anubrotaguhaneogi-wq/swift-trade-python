@@ -379,6 +379,34 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
     rsi_value = float(last15["rsi"])
     atr_value = float(last15["atr"]) if pd.notna(last15["atr"]) else float("nan")
     breakout = signal_close > resistance
+                          # Track the latest genuine 15M breakout crossing in today's session.
+    previous_close = m15["Close"].shift(1)
+    first_today = m15.index.date == session_date
+    first_today_bar = first_today & ~pd.Series(first_today, index=m15.index).shift(1, fill_value=False)
+
+    crossed_above = (
+        (m15["Close"] > resistance)
+        & (
+            (previous_close <= resistance)
+            | (first_today_bar & (m15["Open"] > resistance))
+        )
+        & first_today
+    )
+
+    today_crosses = m15.loc[crossed_above]
+
+    if breakout and not today_crosses.empty:
+        signal_start_ts = today_crosses.index[-1]
+        signal_age_min = max(
+            0.0,
+            (now - (signal_start_ts + pd.Timedelta(minutes=15))).total_seconds() / 60.0
+        )
+    elif breakout:
+        signal_age_min = float("inf")
+    else:
+        signal_age_min = 0.0
+
+    signal_fresh = (not breakout) or signal_age_min <= MAX_SIGNAL_AGE_MIN
     volume_ratio = same_slot_volume_ratio(m15, sig_ts) if breakout else float("nan")
     volume_ok = bool(np.isfinite(volume_ratio) and volume_ratio >= MIN_VOLUME_RATIO)
 
