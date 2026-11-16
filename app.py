@@ -558,3 +558,154 @@ def scan_market(selected_sectors: List[str], force_refresh: bool = False):
     picks = eligible[:TOP_N]
     return picks, skipped, {"rows": rows, "indices": indices, "context": context, "market_note": market_note}
   indices
+# ============================== PART 4/4 ==============================
+# STREAMLIT DASHBOARD, FILTERS, REFRESH, DISPLAY, EXPORT
+
+def money(value):
+    return f"₹{value:,.2f}" if pd.notna(value) else "—"
+
+
+def render_index_cards(indices: dict):
+    if not indices:
+        st.warning("Index data unavailable from Yahoo Finance.")
+        return
+    cols = st.columns(len(indices))
+    for col, (name, item) in zip(cols, indices.items()):
+        with col:
+            st.metric(name, f"{item['price']:,.2f}", f"{item['pct']:+.2f}%")
+
+
+def render_stock_card(row: dict, rank: int):
+    color = {
+        "BUY": "#00c853", "TRIGGER": "#ffca28", "NEAR": "#29b6f6",
+        "CAUTION": "#ff9800", "LATE": "#fb8c00", "WAIT": "#90a4ae", "AVOID": "#ef5350"
+    }.get(row["status"], "#90a4ae")
+    st.markdown(f"""
+    <div style="border:1px solid #29415c;border-left:5px solid {color};border-radius:12px;padding:14px;margin-bottom:12px;background:#101d2d;">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+        <div><span style="color:#9fb3c8;">#{rank}</span> <b style="font-size:1.15rem;color:#fff;">{row['symbol']}</b>
+        <div style="color:#91a4b8;font-size:.78rem;">{row['sector']}</div></div>
+        <div style="text-align:right;"><b style="font-size:1.1rem;color:#fff;">{money(row['price'])}</b>
+        <div style="font-size:.78rem;color:#9fb3c8;">{row['price_time']} IST · age {row['price_age_min']}m</div></div>
+      </div>
+      <div style="margin:10px 0;color:{color};font-weight:800;">{row['status']}</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;font-size:.78rem;color:#dce6f0;margin-bottom:10px;">
+        <span>1H Trend: {'✅' if row['trend_up'] else '❌'}</span>
+        <span>15M Breakout: {'✅' if row['breakout'] else '❌'}</span>
+        <span>Volume: {row['volume_ratio']:.2f}x</span>
+        <span>5M Confirm: {'✅' if row['confirm5'] else '❌'}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;">
+        <div style="background:#0a1522;padding:8px;border-radius:7px;"><small>ENTRY</small><br><b>{money(row['entry'])}</b></div>
+        <div style="background:#0a1522;padding:8px;border-radius:7px;"><small>STOP LOSS</small><br><b style="color:#ff8a80;">{money(row['stop_loss'])}</b></div>
+        <div style="background:#0a1522;padding:8px;border-radius:7px;"><small>TARGET</small><br><b style="color:#69f0ae;">{money(row['target'])}</b></div>
+      </div>
+      <div style="margin-top:9px;color:#b7c7d8;font-size:.78rem;">
+        Resistance: {money(row['resistance'])} · RSI: {row['rsi']:.1f} · Risk: {row['risk_pct']:.2f}% · Score: {row['score']:.2f}
+      </div>
+      <div style="margin-top:7px;color:#e0e8f0;font-size:.82rem;">{row['note']}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
+def main():
+    st.title("📈 Swift Trade V5")
+    st.caption("Dynamic NSE Multi-Timeframe Scanner · 1H Trend · 15M Breakout · 5M Confirmation · 1M Price Check")
+
+    context = market_context()
+    if context["message"]:
+        st.info(context["message"])
+    st.caption(f"Calendar: {context['calendar_note']}")
+
+    with st.sidebar:
+        st.subheader("Scanner Settings")
+        selected_sectors = st.multiselect("Select sectors", list(SECTORS), default=list(SECTORS))
+        auto_refresh = st.toggle("Auto refresh (2 minutes)", value=False)
+        show_all = st.toggle("Show all analyzed stocks", value=False)
+        run_button = st.button("🚀 RUN SCAN", type="primary", use_container_width=True)
+        st.caption("Yahoo Finance data may be delayed, incomplete, or revised. Do not treat it as broker execution data.")
+
+    if auto_refresh and HAS_AUTOREFRESH:
+        st_autorefresh(interval=120_000, key="swift_trade_v5_refresh")
+        run_button = True
+    elif auto_refresh and not HAS_AUTOREFRESH:
+        st.warning("Install streamlit-autorefresh to enable automatic refresh.")
+
+    if "v5_last_scan" not in st.session_state:
+        st.session_state["v5_last_scan"] = None
+    if "v5_last_run" not in st.session_state:
+        st.session_state["v5_last_run"] = 0.0
+
+    if run_button or st.session_state["v5_last_scan"] is None:
+        picks, skipped, meta = scan_market(selected_sectors, force_refresh=run_button)
+        st.session_state["v5_last_scan"] = {"picks": picks, "skipped": skipped, "meta": meta}
+        st.session_state["v5_last_run"] = time.time()
+
+    result = st.session_state["v5_last_scan"]
+    meta = result["meta"]
+    render_index_cards(meta.get("indices", {}))
+
+    st.markdown("---")
+    all_rows = meta.get("rows", [])
+    picks = result["picks"]
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Analyzed", len(all_rows))
+    c2.metric("Top picks", len(picks))
+    c3.metric("BUY", sum(r["status"] == "BUY" for r in all_rows))
+    c4.metric("AVOID", sum(r["status"] == "AVOID" for r in all_rows))
+    st.caption(f"Last scan: {datetime.now().strftime('%H:%M:%S')} · Data source: Yahoo Finance")
+
+    if not picks:
+        st.warning("No qualified stocks found. Do not force a trade; wait for a valid setup.")
+    else:
+        st.subheader(f"Top {len(picks)} ranked setups")
+        for i, row in enumerate(picks, 1):
+            render_stock_card(row, i)
+
+    if show_all and all_rows:
+        st.subheader("All analyzed stocks")
+        table_rows = []
+        for r in all_rows:
+            table_rows.append({
+                "Symbol": r["symbol"], "Sector": r["sector"], "Status": r["status"],
+                "Price": r["price"], "Resistance": r["resistance"], "RSI": r["rsi"],
+                "Volume x": r["volume_ratio"], "Risk %": r["risk_pct"],
+                "Entry": r["entry"], "Stop Loss": r["stop_loss"], "Target": r["target"],
+                "Score": r["score"], "Reason": r["note"],
+            })
+        st.dataframe(pd.DataFrame(table_rows), use_container_width=True, hide_index=True)
+
+    if all_rows:
+        export_df = pd.DataFrame([{
+            "Symbol": r["symbol"], "Sector": r["sector"], "Status": r["status"],
+            "Price": r["price"], "Resistance": r["resistance"], "RSI": r["rsi"],
+            "Volume_Ratio": r["volume_ratio"], "Entry": r["entry"],
+            "Stop_Loss": r["stop_loss"], "Target": r["target"],
+            "Risk_Pct": r["risk_pct"], "Score": r["score"], "Reason": r["note"],
+        } for r in all_rows])
+        st.download_button(
+            "Download CSV",
+            export_df.to_csv(index=False).encode("utf-8-sig"),
+            file_name="swift_trade_v5_scan.csv",
+            mime="text/csv",
+        )
+        watchlist = "\n".join(f"NSE:{r['symbol']}" for r in picks)
+        st.download_button(
+            "Download TradingView Watchlist",
+            watchlist,
+            file_name="swift_trade_v5_watchlist.txt",
+            mime="text/plain",
+        )
+
+    if result["skipped"]:
+        with st.expander(f"Skipped symbols ({len(result['skipped'])})"):
+            st.dataframe(pd.DataFrame(result["skipped"], columns=["Symbol", "Reason"]),
+                         use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    st.caption("V5 is a research scanner, not an execution system. Validate every signal on the live exchange chart and paper-trade before risking capital.")
+
+
+if __name__ == "__main__":
+    main()
+    
