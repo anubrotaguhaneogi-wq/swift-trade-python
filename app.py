@@ -446,6 +446,11 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
         status, note = ("AVOID" if trend_down else "WAIT"), "Market is not in an active trading session."
     elif context["phase"] in ("NO_NEW_ENTRY", "EARLY"):
         status, note = ("AVOID" if trend_down else "WAIT"), str(context["message"])
+            elif breakout and not signal_fresh:
+        status, note = "WAIT", (
+            f"Breakout signal expired ({signal_age_min:.1f} min). "
+            "Wait for a fresh breakout."
+                      )
     elif breakout and trend_down:
         status, note = "CAUTION", "15M breakout against the 1H downtrend. Counter-trend trade is not approved."
     elif breakout and (extension_pct > MAX_EXTENSION_PCT or rsi_value > RSI_MAX_BUY):
