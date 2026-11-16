@@ -554,7 +554,7 @@ def scan_market(selected_sectors: List[str], force_refresh: bool = False):
     progress.empty()
 
     rows.sort(key=lambda r: (STATUS_ORDER.get(r["status"], 99), -r["score"]))
-    eligible = [r for r in rows if r["status"] not in ("AVOID",)]
+    eligible = [r for r in rows if r["status"] in ("BUY", "TRIGGER")]
     picks = eligible[:TOP_N]
     return picks, skipped, {"rows": rows, "indices": indices, "context": context, "market_note": market_note}
   
