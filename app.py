@@ -557,7 +557,7 @@ def scan_market(selected_sectors: List[str], force_refresh: bool = False):
     eligible = [r for r in rows if r["status"] not in ("AVOID",)]
     picks = eligible[:TOP_N]
     return picks, skipped, {"rows": rows, "indices": indices, "context": context, "market_note": market_note}
-  indices
+  
 # ============================== PART 4/4 ==============================
 # STREAMLIT DASHBOARD, FILTERS, REFRESH, DISPLAY, EXPORT
 
