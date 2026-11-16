@@ -653,7 +653,7 @@ def main():
     c2.metric("Top picks", len(picks))
     c3.metric("BUY", sum(r["status"] == "BUY" for r in all_rows))
     c4.metric("AVOID", sum(r["status"] == "AVOID" for r in all_rows))
-    st.caption(f"Last scan: {datetime.now().strftime('%H:%M:%S')} · Data source: Yahoo Finance")
+    st.caption(f"Last scan: {now_ist().strftime('%H:%M:%S')} IST · Data source: Yahoo Finance")
 
     if not picks:
         st.warning("No qualified stocks found. Do not force a trade; wait for a valid setup.")
