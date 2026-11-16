@@ -638,6 +638,7 @@ def render_stock_card(row: dict, rank: int):
       <div style="margin-top:9px;color:#b7c7d8;font-size:.78rem;">
         Resistance: {money(row['resistance'])} · RSI: {row['rsi']:.1f} · Risk: {row['risk_pct']:.2f}% · Score: {row['score']:.2f}
       </div>
+              <div style="margin-top:7px;color:#b7c7d8;font-size:.78rem;">Signal Age: {row.get('signal_age_min') if row.get('signal_age_min') is not None else 'N/A'} min | Fresh: {'YES' if row.get('signal_fresh', False) else 'NO'}</div>
       <div style="margin-top:7px;color:#e0e8f0;font-size:.82rem;">{row['note']}</div>
     </div>
     """, unsafe_allow_html=True)
