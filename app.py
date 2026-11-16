@@ -485,6 +485,8 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
         "trend_up": trend_up, "trend_down": trend_down, "breakout": breakout,
         "volume_ok": volume_ok, "confirm5": confirm5, "gap_up": gap_up,
         "signal_time": sig_ts.strftime("%H:%M"), "stale": stale,
+                "signal_age_min": round(signal_age_min, 1) if np.isfinite(signal_age_min) else None,
+        "signal_fresh": signal_fresh,
     }, None
       # ============================== PART 3/4 ==============================
 # ENTRY / STOP / TARGET, RISK FILTER, RANKING, SCAN ORCHESTRATION
