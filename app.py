@@ -648,6 +648,8 @@ def main():
     st.title("📈 Swift Trade V5")
     st.caption("Dynamic NSE Multi-Timeframe Scanner · 1H Trend · 15M Breakout · 5M Confirmation · 1M Price Check")
 
+    st.image("swift_trade_banner.png", use_container_width=True)
+    
     context = market_context()
     if context["message"]:
         st.info(context["message"])
