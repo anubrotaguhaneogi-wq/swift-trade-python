@@ -407,7 +407,7 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
     )
 
     today_crosses = m15.loc[crossed_above]
-
+    signal_start_ts = None
     if breakout and not today_crosses.empty:
         signal_start_ts = today_crosses.index[-1]
         signal_age_min = max(
@@ -420,7 +420,11 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
         signal_age_min = 0.0
 
     signal_fresh = (not breakout) or signal_age_min <= MAX_SIGNAL_AGE_MIN
-    volume_ratio = same_slot_volume_ratio(m15, sig_ts) if breakout else float("nan")
+    volume_ratio = (
+    same_slot_volume_ratio(m15, signal_start_ts)
+    if breakout and signal_start_ts is not None
+    else float("nan")
+    )
     volume_ok = bool(np.isfinite(volume_ratio) and volume_ratio >= MIN_VOLUME_RATIO)
 
     # 5M confirmation uses multi-day history for EMA warm-up, not today's 10 bars only.
