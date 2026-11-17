@@ -113,12 +113,25 @@ def clean_ohlcv(frame: pd.DataFrame) -> pd.DataFrame:
     df = df[OHLCV].apply(pd.to_numeric, errors="coerce")
     df = df.dropna(subset=["Open", "High", "Low", "Close"])
     df["Volume"] = df["Volume"].fillna(0).clip(lower=0)
-    valid = (df[["Open", "High", "Low", "Close"]] > 0).all(axis=1)
-    df = df.loc[valid].copy()
+    
+    price_cols = ["Open", "High", "Low", "Close"]
+
+    finite_prices = np.isfinite(df[price_cols]).all(axis=1)
+    positive_prices = (df[price_cols] > 0).all(axis=1)
+
+    valid_ohlc = (
+        (df["High"] >= df[["Open", "Close"]].max(axis=1))
+        & (df["Low"] <= df[["Open", "Close"]].min(axis=1))
+        & (df["High"] >= df["Low"])
+    )
+
+    df = df.loc[
+        finite_prices & positive_prices & valid_ohlc
+    ].copy()
+
     if df.empty:
         return df
-    df["High"] = df[["Open", "High", "Low", "Close"]].max(axis=1)
-    df["Low"] = df[["Open", "High", "Low", "Close"]].min(axis=1)
+        
     df = df[~df.index.duplicated(keep="last")].sort_index()
     return df
 
