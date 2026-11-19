@@ -49,9 +49,9 @@ MAX_PRICE_DEVIATION_PCT = 5.0
 
 MAX_EXTENSION_PCT = 2.0
 NEAR_DISTANCE_PCT = 1.0
-MIN_VOLUME_RATIO = 1.5
-RSI_MIN_BUY = 50.0
-RSI_MAX_BUY = 70.0
+MIN_VOLUME_RATIO = 1.30
+RSI_MIN_BUY = 48.0
+RSI_MAX_BUY = 72.0
 MAX_ENTRY_RISK_PCT = 2.5
 ATR_STOP_MULTIPLIER = 1.5
 REWARD_RISK = 2.0
@@ -432,15 +432,13 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
     m5["ema9"] = ema(m5["Close"], EMA_FAST)
     today5 = m5[m5.index.date == session_date]
     if len(today5) >= 2:
-        last5 = today5.iloc[-1]
-        prev5 = today5.iloc[-2]
-        confirm5 = bool(
-            last5["Close"] > resistance
-            and last5["Close"] > last5["ema9"]
-            and last5["Close"] >= prev5["Close"]
-        )
-    else:
-        confirm5 = False
+    last5 = today5.iloc[-1]
+    confirm5 = bool(
+        last5["Close"] > resistance
+        and last5["Close"] > last5["ema9"]
+    )
+else:
+    confirm5 = False
 
     live_price, live_ts, live_interval = last_price_from_intraday({"1m": m1_raw, "5m": m5_raw, "15m": m15_raw})
     if live_price is None or live_ts is None:
