@@ -431,7 +431,7 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
     m5 = m5.copy()
     m5["ema9"] = ema(m5["Close"], EMA_FAST)
     today5 = m5[m5.index.date == session_date]
-   if len(today5) >= 2:
+       if len(today5) >= 2:
     last5 = today5.iloc[-1]
      confirm5 = bool(
      last5["Close"] > resistance
