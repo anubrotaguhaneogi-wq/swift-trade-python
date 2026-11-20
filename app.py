@@ -428,17 +428,18 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
     volume_ok = bool(np.isfinite(volume_ratio) and volume_ratio >= MIN_VOLUME_RATIO)
 
     # 5M confirmation uses multi-day history for EMA warm-up, not today's 10 bars only.
-    m5 = m5.copy()
-    m5["ema9"] = ema(m5["Close"], EMA_FAST)
-    today5 = m5[m5.index.date == session_date]
-       if len(today5) >= 2:
-    last5 = today5.iloc[-1]
-     confirm5 = bool(
-     last5["Close"] > resistance
-     and last5["Close"] > last5["ema9"]
-     )
-    else:
-        confirm5 = False
+        m5 = m5.copy()
+        m5["ema9"] = ema(m5["Close"], EMA_FAST)
+        today5 = m5[m5.index.date == session_date]
+
+        if len(today5) >= 2:
+            last5 = today5.iloc[-1]
+            confirm5 = bool(
+                last5["Close"] > resistance
+                and last5["Close"] > last5["ema9"]
+            )
+        else:
+            confirm5 = False
 
     live_price, live_ts, live_interval = last_price_from_intraday({"1m": m1_raw, "5m": m5_raw, "15m": m15_raw})
     if live_price is None or live_ts is None:
