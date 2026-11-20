@@ -428,7 +428,7 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
     volume_ok = bool(np.isfinite(volume_ratio) and volume_ratio >= MIN_VOLUME_RATIO)
 
 # 5M confirmation uses multi-day history for EMA warm-up
-   m5 = m5.copy()
+       m5 = m5.copy()
    m5["ema9"] = ema(m5["Close"], EMA_FAST)
    today5 = m5[m5.index.date == session_date]
 
