@@ -455,6 +455,7 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
     gap_up = float(today15["Open"].iloc[0]) > resistance * 1.003
 
     # Status engine: a downtrend breakout is visible as CAUTION, not silently discarded.
+    
     if stale:
         status, note = "WAIT", f"Price data stale or inconsistent ({age_min:.1f} min; deviation {deviation:.2f}%)."
     elif context["phase"] in ("CLOSED", "PREOPEN"):
@@ -465,13 +466,11 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
         status, note = "WAIT", (
             f"Breakout signal expired ({signal_age_min:.1f} min). "
             "Wait for a fresh breakout."
-
         )
     elif breakout and live_price <= resistance:
         status, note = "WAIT", "Breakout failed: live price is back below resistance. No BUY entry."
     elif breakout and trend_down:
         status, note = "CAUTION", "15M breakout against the 1H downtrend. Counter-trend trade is not approved."
-
     elif breakout and (extension_pct > MAX_EXTENSION_PCT or rsi_value > RSI_MAX_BUY):
         status, note = "LATE", "Breakout is extended or RSI is above the approved entry zone."
     elif breakout and not volume_ok:
@@ -488,6 +487,7 @@ def analyze_stock(symbol: str, sector: str, data: Dict[str, pd.DataFrame],
         status, note = "AVOID", "1H trend is down."
     else:
         status, note = "WAIT", "No qualified breakout setup."
+        
 
     if not market_ok and status in ("BUY", "TRIGGER", "NEAR"):
         status, note = "WAIT", f"No confirmed NSE session: {market_note}"
