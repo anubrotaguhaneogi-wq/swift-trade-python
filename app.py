@@ -218,27 +218,33 @@ def completed_candles(frame: pd.DataFrame, interval: str, current: Optional[pd.T
 
 
 def last_price_from_intraday(frames: Dict[str, pd.DataFrame]) -> Tuple[Optional[float], Optional[pd.Timestamp], str]:
-    candidates = []
+        candidates = []
     now = now_ist()
+
     for interval in ("1m", "5m", "15m"):
         df = frames.get(interval)
         if df is None or df.empty:
             continue
+
         d = to_ist_frame(df)
         today = d[d.index.date == now.date()]
+
         if today.empty:
             continue
-         valid_today = today[today.index <= now]
+
+        valid_today = today[today.index <= now]
         if valid_today.empty:
             continue
+
         ts = valid_today.index[-1]
         px = float(valid_today["Close"].iloc[-1])
-        
-        
+
         if np.isfinite(px) and px > 0:
             candidates.append((ts, px, interval))
+
     if not candidates:
         return None, None, "Unavailable"
+
     ts, px, interval = max(candidates, key=lambda x: x[0])
     return px, ts, interval
 
