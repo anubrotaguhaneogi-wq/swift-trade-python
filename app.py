@@ -218,8 +218,8 @@ def completed_candles(frame: pd.DataFrame, interval: str, current: Optional[pd.T
 
 
 def last_price_from_intraday(frames: Dict[str, pd.DataFrame]) -> Tuple[Optional[float], Optional[pd.Timestamp], str]:
-        candidates = []
-        now = now_ist()
+    candidates = []
+    now = now_ist()
 
     for interval in ("1m", "5m", "15m"):
         df = frames.get(interval)
