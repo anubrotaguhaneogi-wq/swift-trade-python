@@ -228,7 +228,7 @@ def last_price_from_intraday(frames: Dict[str, pd.DataFrame]) -> Tuple[Optional[
         today = d[d.index.date == now.date()]
         if today.empty:
             continue
-            valid_today = today[today.index <= now]
+         valid_today = today[today.index <= now]
         if valid_today.empty:
             continue
         ts = valid_today.index[-1]
